@@ -34,7 +34,7 @@ user IDs in `MONITOR_ALLOWED_GITHUB_IDS` get a session. Sessions are signed cook
 ## Deployment
 
 `operations/compose.yaml` runs the app next to the Factory runtime on the runtime host, behind Traefik
-(`sfm_front`) and on `sf-runtime-api`. The Factory installed deploy-only in this repository deploys it after CI
+(`sfm_front`) and on `sf-runtime-api`. The Factory installed deploy-only in this repository deploys it after the Test workflow
 passed on `main` (docker-ssh, compose file `operations/compose.yaml`, project `sf-monitor`). Secrets come from
 the GitHub environment `production` of this repository: the configuration declares them in `deploy.secrets`
 (Factory 0.12.0), the SF Manager renders them into the wrapper's `deploy-env`, and each deployment writes them to
@@ -44,7 +44,7 @@ the GitHub environment `production` of this repository: the configuration declar
 deploy:
   enabled: true
   trigger: checks
-  workflows: ['CI']
+  workflows: ['Test'] # the default the Factory's deploy wrapper listens to
   path: /home/deploy/sf-monitor
   composeFile: operations/compose.yaml
   project: sf-monitor
