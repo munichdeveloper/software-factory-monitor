@@ -1,3 +1,7 @@
 node_modules
 .next
 package-lock.json
+# Owned by the SF Manager: rewritten on every rollout, never reformatted here.
+.github/software-factory.yml
+.github/software-factory.validation.json
+.github/workflows/factory-*.yml
