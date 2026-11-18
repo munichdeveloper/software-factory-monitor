@@ -1,8 +1,7 @@
 version: 1
 factory:
-  enabled: false
-  scope: "Coordinate explicitly managed repository tasks; implement code and
-    propose reviewable PRs with Codex."
+  enabled: false # Deploy-only: no manager workflow is installed and every worker is off.
+  scope: "Deploy the queue monitor; no managed tasks."
 manager:
   workflow: factory-manager.yml
   maxActions: 10
@@ -31,11 +30,7 @@ workers:
   test:
     enabled: false
     operation: sha256
-  coding:
-    enabled: true
-    agent: codex
-    model: gpt-6.1-sol
-    reasoningEffort: high
+  coding: false
   review: false
 reporting:
   persistDecisions: true
