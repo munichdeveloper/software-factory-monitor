@@ -1,0 +1,58 @@
+# Production monitor on the Factory runtime host (VPS 2127002), deployed by the Software Factory installed in this
+# repository (docker-ssh) whenever CI passes on the default branch. SF_RELEASE_SHA is set by the deployment.
+#
+# Networks provided by the Factory runtime stack (munichdeveloper/software-factory, Compose project sfm):
+#   sf-runtime-api  internal network of the runtime broker (runtime-broker:8095); read with FACTORY_MONITOR_TOKEN only
+#   sfm_front       the network Traefik routes through
+# Configuration:
+#   MONITOR_HOST    public host name, from the release's .env (deploy.envFile)
+#   .sf-deploy.env  written by the deployment from deploy.secrets (Factory 0.12.0, rendered into the wrapper by
+#                   the SF Manager; GitHub secrets of the environment
+#                   "production" of this repository): FACTORY_MONITOR_TOKEN, GITHUB_OAUTH_CLIENT_ID,
+#                   GITHUB_OAUTH_CLIENT_SECRET, MONITOR_ALLOWED_GITHUB_IDS, MONITOR_SESSION_SECRET
+name: sf-monitor
+services:
+  web:
+    image: sf-monitor:${SF_RELEASE_SHA:?}
+    build:
+      context: .
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: '3' }
+    env_file: [.sf-deploy.env]
+    environment:
+      APP_URL: https://${MONITOR_HOST:?}
+      FACTORY_RUNTIME_URL: http://runtime-broker:8095
+      NODE_ENV: production
+    tmpfs: [/tmp]
+    # front: Traefik and outbound HTTPS (GitHub login); runtime-api: the broker.
+    networks: [runtime-api, front]
+    mem_limit: 384m
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    labels:
+      traefik.enable: 'true'
+      traefik.docker.network: sfm_front
+      traefik.http.routers.sf-monitor.rule: Host(`${MONITOR_HOST:?}`)
+      traefik.http.routers.sf-monitor.entrypoints: websecure
+      traefik.http.routers.sf-monitor.tls: 'true'
+      traefik.http.routers.sf-monitor.tls.certresolver: letsencrypt
+      traefik.http.services.sf-monitor.loadbalancer.server.port: '3000'
+networks:
+  runtime-api: { name: sf-runtime-api, external: true }
+  front: { name: sfm_front, external: true }
