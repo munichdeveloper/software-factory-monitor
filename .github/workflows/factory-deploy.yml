@@ -40,3 +40,10 @@ jobs:
           deploy-host: ${{ secrets.DEPLOY_HOST || vars.DEPLOY_HOST }}
           deploy-user: ${{ secrets.DEPLOY_USER || vars.DEPLOY_USER }}
           deploy-port: ${{ vars.DEPLOY_PORT }}
+          # Rendered by the SF Manager from deploy.secrets in .github/software-factory.yml.
+          deploy-env: |
+            FACTORY_MONITOR_TOKEN=${{ secrets.MONITOR_FACTORY_TOKEN }}
+            GITHUB_OAUTH_CLIENT_ID=${{ secrets.MONITOR_OAUTH_CLIENT_ID }}
+            GITHUB_OAUTH_CLIENT_SECRET=${{ secrets.MONITOR_OAUTH_CLIENT_SECRET }}
+            MONITOR_ALLOWED_GITHUB_IDS=${{ secrets.MONITOR_ALLOWED_GITHUB_IDS }}
+            MONITOR_SESSION_SECRET=${{ secrets.MONITOR_SESSION_SECRET }}

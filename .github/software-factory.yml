@@ -88,15 +88,20 @@ deploy:
   host: null
   port: null
   user: null
-  path: /opt/app
-  composeFile: compose.yaml
-  project: null # Docker Compose project; defaults to the last path segment. Keep stable: named volumes belong to it.
-  envFile: .env # Relative to path (or absolute) on the host, linked into each release; null to disable.
+  path: /home/deploy/sf-monitor
+  composeFile: operations/compose.yaml
+  project: sf-monitor # Docker Compose project. Keep stable: named volumes belong to it.
+  envFile: null # MONITOR_HOST defaults in operations/compose.yaml; secrets come through deploy.secrets.
   healthcheck:
-    url: null # e.g. http://127.0.0.1:3000/ checked on the host after docker compose up --wait
+    url: null # The compose healthcheck (/api/health) gates docker compose up --wait.
     timeoutSeconds: 180
   rollback: true
   keepReleases: 5
   timeoutMinutes: 30
   githubDeployment: false # The wrapper's GitHub environment already records each deployment.
-  secrets: {} # NAME: GITHUB_SECRET_NAME; the SF Manager passes them to the host through the wrapper's deploy-env.
+  secrets: # NAME: GITHUB_SECRET_NAME; the SF Manager passes them to the host through the wrapper's deploy-env.
+    FACTORY_MONITOR_TOKEN: MONITOR_FACTORY_TOKEN
+    GITHUB_OAUTH_CLIENT_ID: MONITOR_OAUTH_CLIENT_ID
+    GITHUB_OAUTH_CLIENT_SECRET: MONITOR_OAUTH_CLIENT_SECRET
+    MONITOR_ALLOWED_GITHUB_IDS: MONITOR_ALLOWED_GITHUB_IDS
+    MONITOR_SESSION_SECRET: MONITOR_SESSION_SECRET
