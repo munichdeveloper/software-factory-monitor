@@ -5,7 +5,7 @@
 #   sf-runtime-api  internal network of the runtime broker (runtime-broker:8095); read with FACTORY_MONITOR_TOKEN only
 #   sfm_front       the network Traefik routes through
 # Configuration:
-#   MONITOR_HOST    public host name, from the release's .env (deploy.envFile)
+#   MONITOR_HOST    public host name; defaults to sf-monitor.srv2127002.hstgr.cloud (no host-side .env needed)
 #   .sf-deploy.env  written by the deployment from deploy.secrets (Factory 0.12.0, rendered into the wrapper by
 #                   the SF Manager; GitHub secrets of the environment
 #                   "production" of this repository): FACTORY_MONITOR_TOKEN, GITHUB_OAUTH_CLIENT_ID,
@@ -26,7 +26,7 @@ services:
       options: { max-size: 10m, max-file: '3' }
     env_file: [.sf-deploy.env]
     environment:
-      APP_URL: https://${MONITOR_HOST:?}
+      APP_URL: https://${MONITOR_HOST:-sf-monitor.srv2127002.hstgr.cloud}
       FACTORY_RUNTIME_URL: http://runtime-broker:8095
       NODE_ENV: production
     tmpfs: [/tmp]
@@ -48,7 +48,7 @@ services:
     labels:
       traefik.enable: 'true'
       traefik.docker.network: sfm_front
-      traefik.http.routers.sf-monitor.rule: Host(`${MONITOR_HOST:?}`)
+      traefik.http.routers.sf-monitor.rule: Host(`${MONITOR_HOST:-sf-monitor.srv2127002.hstgr.cloud}`)
       traefik.http.routers.sf-monitor.entrypoints: websecure
       traefik.http.routers.sf-monitor.tls: 'true'
       traefik.http.routers.sf-monitor.tls.certresolver: letsencrypt

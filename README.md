@@ -38,7 +38,7 @@ user IDs in `MONITOR_ALLOWED_GITHUB_IDS` get a session. Sessions are signed cook
 passed on `main` (docker-ssh, compose file `operations/compose.yaml`, project `sf-monitor`). Secrets come from
 the GitHub environment `production` of this repository: the configuration declares them in `deploy.secrets`
 (Factory 0.12.0), the SF Manager renders them into the wrapper's `deploy-env`, and each deployment writes them to
-`.sf-deploy.env`. `MONITOR_HOST` comes from the release's `.env` (`deploy.envFile`).
+`.sf-deploy.env`. `MONITOR_HOST` defaults to `sf-monitor.srv2127002.hstgr.cloud` in the compose file, so the host needs no `.env`.
 
 ```yaml
 deploy:
@@ -48,7 +48,7 @@ deploy:
   path: /home/deploy/sf-monitor
   composeFile: operations/compose.yaml
   project: sf-monitor
-  envFile: /home/deploy/sfm-runtime/.env # MONITOR_HOST
+  envFile: null # MONITOR_HOST defaults to sf-monitor.srv2127002.hstgr.cloud in the compose file
   secrets:
     FACTORY_MONITOR_TOKEN: MONITOR_FACTORY_TOKEN
     GITHUB_OAUTH_CLIENT_ID: MONITOR_OAUTH_CLIENT_ID
