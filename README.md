@@ -36,8 +36,26 @@ user IDs in `MONITOR_ALLOWED_GITHUB_IDS` get a session. Sessions are signed cook
 `operations/compose.yaml` runs the app next to the Factory runtime on the runtime host, behind Traefik
 (`sfm_front`) and on `sf-runtime-api`. The Factory installed deploy-only in this repository deploys it after CI
 passed on `main` (docker-ssh, compose file `operations/compose.yaml`, project `sf-monitor`). Secrets come from
-the GitHub environment `production` of this repository through the deploy wrapper's `deploy-env`
-(written to `.sf-deploy.env`); `MONITOR_HOST` comes from the release's `.env` (`deploy.envFile`).
+the GitHub environment `production` of this repository: the configuration declares them in `deploy.secrets`
+(Factory 0.12.0), the SF Manager renders them into the wrapper's `deploy-env`, and each deployment writes them to
+`.sf-deploy.env`. `MONITOR_HOST` comes from the release's `.env` (`deploy.envFile`).
+
+```yaml
+deploy:
+  enabled: true
+  trigger: checks
+  workflows: ['CI']
+  path: /home/deploy/sf-monitor
+  composeFile: operations/compose.yaml
+  project: sf-monitor
+  envFile: /home/deploy/sfm-runtime/.env # MONITOR_HOST
+  secrets:
+    FACTORY_MONITOR_TOKEN: MONITOR_FACTORY_TOKEN
+    GITHUB_OAUTH_CLIENT_ID: MONITOR_OAUTH_CLIENT_ID
+    GITHUB_OAUTH_CLIENT_SECRET: MONITOR_OAUTH_CLIENT_SECRET
+    MONITOR_ALLOWED_GITHUB_IDS: MONITOR_ALLOWED_GITHUB_IDS
+    MONITOR_SESSION_SECRET: MONITOR_SESSION_SECRET
+```
 
 ## Development
 

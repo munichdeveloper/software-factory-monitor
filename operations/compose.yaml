@@ -6,7 +6,8 @@
 #   sfm_front       the network Traefik routes through
 # Configuration:
 #   MONITOR_HOST    public host name, from the release's .env (deploy.envFile)
-#   .sf-deploy.env  written by the deployment from the wrapper's deploy-env (GitHub secrets of the environment
+#   .sf-deploy.env  written by the deployment from deploy.secrets (Factory 0.12.0, rendered into the wrapper by
+#                   the SF Manager; GitHub secrets of the environment
 #                   "production" of this repository): FACTORY_MONITOR_TOKEN, GITHUB_OAUTH_CLIENT_ID,
 #                   GITHUB_OAUTH_CLIENT_SECRET, MONITOR_ALLOWED_GITHUB_IDS, MONITOR_SESSION_SECRET
 name: sf-monitor
