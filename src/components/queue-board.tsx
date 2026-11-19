@@ -189,7 +189,10 @@ function Repository({
   interval: number | null;
   now: number;
 }) {
-  const entries = repository.entries.filter((e) => !filter || groupOf(e.stage) === filter);
+  // Finished tasks leave the list at once; the "Erledigt (24 h)" tile still counts them and shows them when selected.
+  const entries = repository.entries.filter((e) =>
+    filter ? groupOf(e.stage) === filter : groupOf(e.stage) !== 'done',
+  );
   // Positions count only what still waits to be started, in the broker's order.
   let waiting = 0;
   const next =
