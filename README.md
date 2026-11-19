@@ -6,13 +6,20 @@ Factory runtime serves, where it stands (running, queued, waiting for a free wor
 when, with attempts, priority, dependencies and pull requests, plus each repository's worker slots and its last
 reconciliation. The page refreshes every 30 seconds. UI language: German.
 
+The page **Kosten** (`/analytics`) shows what the Factory's model calls cost over 7, 30 or 90 days, per repository
+or for all: cost per merged feature (median and mean, every attempt of an issue included), cost without a result,
+cost per step (coding, merge review, risk assessment, planning) and per week, a table of models with who chose them
+(model router Jev, configuration or escalation), and every feature (issue) with each of its model calls. Only
+inference cost at list prices is counted; Jev's routing requests and Actions minutes are not.
+
 ## Data source
 
 The runtime broker (munichdeveloper/software-factory) keeps the queue of each repository after every
 reconciliation and serves it at `GET /v1/queue` (see its `docs/temporal-runtime.md`). The view is built from what
 the reconciliation already read, so the dashboard costs **no GitHub requests** besides the login. The monitor
 reads it over the internal network `sf-runtime-api` with `FACTORY_MONITOR_TOKEN`, a read-only credential that
-opens this view and nothing else.
+opens this view and the cost analytics (`GET /v1/analytics`, broker since software-factory#170) and nothing
+else.
 
 ## Access
 
