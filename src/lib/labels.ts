@@ -10,13 +10,14 @@ export const stageLabels: Record<string, string> = {
   blocked: 'Blockiert',
   'awaiting-pr': 'PR wartet auf Review',
   failed: 'Fehlgeschlagen',
-  closed: 'Geschlossen',
+  closed: 'Erledigt',
 };
 export const groupLabels = {
   active: 'Läuft',
   waiting: 'In Warteschlange',
   person: 'Wartet auf dich',
   stuck: 'Blockiert / fehlgeschlagen',
+  done: 'Erledigt (24 h)',
 } as const;
 export const phaseLabels: Record<string, string> = {
   starting: 'startet',
