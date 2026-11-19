@@ -48,6 +48,8 @@ export const errorLabels: Record<string, string> = {
   RUNTIME_UNREACHABLE: 'Die Factory-Laufzeit ist nicht erreichbar.',
   RUNTIME_UNAUTHORIZED: 'Die Laufzeit lehnt das Monitor-Token ab (FACTORY_MONITOR_TOKEN prüfen).',
   RUNTIME_QUEUE_UNSUPPORTED: 'Die laufende Factory-Version bietet die Queue-Ansicht noch nicht an.',
+  RUNTIME_ANALYTICS_UNSUPPORTED:
+    'Die laufende Factory-Version bietet die Kosten-Analyse noch nicht an.',
   RUNTIME_INVALID_RESPONSE: 'Die Laufzeit hat eine unerwartete Antwort geliefert.',
   RUNTIME_URL_INSECURE:
     'FACTORY_RUNTIME_URL muss HTTPS sein (außer runtime-broker im internen Netz).',

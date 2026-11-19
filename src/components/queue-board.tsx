@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Loaded } from '@/lib/load';
 import {
@@ -223,6 +224,10 @@ export function QueueBoard({ initial, login }: { initial: Loaded; login: string 
     <main className="board">
       <header className="top">
         <div>
+          <nav className="tabs" aria-label="Ansicht">
+            <span aria-current="page">Queue</span>
+            <Link href="/analytics">Kosten</Link>
+          </nav>
           <h1>Factory-Queue</h1>
           <p className="muted">
             {view ? `Stand ${relative(view.generatedAt, now)} · ` : ''}aktualisiert sich alle{' '}
