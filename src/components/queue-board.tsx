@@ -10,8 +10,9 @@ import {
   type QueueEntry,
   type QueueRepository,
 } from '@/lib/queue';
-import { errorLabels, groupLabels, phaseLabels, reasonLabels, stageLabels } from '@/lib/labels';
+import { errorLabels, groupLabels, reasonLabels, stageLabels } from '@/lib/labels';
 import { clock, relative } from '@/lib/time';
+import { pipeline, runKindLabels, stepStateLabels, type StepState } from '@/lib/pipeline';
 
 const refreshSeconds = 30;
 const priorityLabels = { high: 'Hoch', normal: 'Normal', low: 'Niedrig' } as const;
@@ -25,6 +26,69 @@ function repoLink(repository: string, issue: number) {
 }
 function prNumber(url: string) {
   return `#${url.split('/').pop()}`;
+}
+
+const stepIcons: Record<StepState, string> = {
+  done: '✓',
+  current: '',
+  waiting: '…',
+  person: '!',
+  failed: '✕',
+  pending: '',
+  skipped: '–',
+};
+const runOutcome = (run: QueueEntry['runs'][number]) =>
+  run.active
+    ? 'läuft'
+    : run.validation === 'passed' && run.outcome === 'success'
+      ? 'validiert'
+      : run.validation === 'failed'
+        ? 'Validierung fehlgeschlagen'
+        : run.infrastructure
+          ? 'Runner-Fehler'
+          : ((
+              {
+                success: 'erfolgreich',
+                blocked: 'abgebrochen',
+                failed: 'fehlgeschlagen',
+                cancelled: 'abgebrochen',
+                needs_approval: 'fragt nach Freigabe',
+              } as Record<string, string>
+            )[run.outcome ?? ''] ?? 'unbekannt');
+
+/** The task's way through the Factory: finished steps ticked, the current one highlighted, the rest still open. */
+function Pipeline({ entry }: { entry: QueueEntry }) {
+  const steps = pipeline(entry);
+  return (
+    <div className="pipeline-wrap">
+      <ol className="pipeline" aria-label="Pipeline">
+        {steps.map((step) => (
+          <li
+            key={step.key}
+            className={`step ${step.state}`}
+            title={`${step.label}: ${stepStateLabels[step.state]}${step.note ? ` – ${step.note}` : ''}`}
+          >
+            <span className="dot" aria-hidden="true">
+              {stepIcons[step.state]}
+            </span>
+            <span className="step-text">
+              <span className="step-label">{step.label}</span>
+              <span className="step-note">{step.note ?? stepStateLabels[step.state]}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+      {entry.runs.length > 1 && (
+        <ol className="runs" aria-label="Versuche">
+          {entry.runs.map((run, i) => (
+            <li key={run.executionId} className={run.active ? 'active' : ''}>
+              {i + 1}. {runKindLabels[run.kind] ?? run.kind}: {runOutcome(run)}
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
 }
 
 function Slots({ slots }: { slots: QueueRepository['slots'] }) {
@@ -54,7 +118,6 @@ function Entry({
 }) {
   const group = groupOf(entry.stage);
   const details: ReactNode[] = [];
-  if (entry.run?.phase) details.push(`Phase: ${phaseLabels[entry.run.phase] ?? entry.run.phase}`);
   if (entry.reason) details.push(reasonLabels[entry.reason] ?? entry.reason);
   if (entry.retryAt) details.push(`Nächster Startversuch spätestens ${clock(entry.retryAt)}`);
   if (entry.dependsOn.length)
@@ -99,6 +162,7 @@ function Entry({
             ))}
           </div>
         )}
+        <Pipeline entry={entry} />
       </div>
       <span className={`badge ${group ?? ''}`}>{stageText(entry)}</span>
       <span className="meta">

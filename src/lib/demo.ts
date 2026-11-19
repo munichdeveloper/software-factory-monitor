@@ -1,4 +1,4 @@
-import type { QueueView } from './queue';
+import type { MergeProgress, QueueRun, QueueView } from './queue';
 import type { AnalyticsCall, AnalyticsView } from './analytics';
 
 /** Sample data for MONITOR_DEMO=1 (development only) and tests. */
@@ -13,10 +13,36 @@ export function demoQueue(now = new Date()): QueueView {
     waitsForSlot: false,
     dependsOn: [],
     pullRequests: [],
+    runs: [],
+    merge: null,
+    mergedAt: null,
   };
+  let id = 0;
+  const run = (over: Partial<QueueRun>): QueueRun => ({
+    executionId: (++id).toString(16).padStart(32, '0'),
+    kind: 'first',
+    startedAt: ago(60),
+    phase: null,
+    active: false,
+    outcome: 'success',
+    validation: 'passed',
+    error: null,
+    infrastructure: false,
+    model: 'claude-sonnet-5-5',
+    ...over,
+  });
+  const merge = (pullRequest: number, over: Partial<MergeProgress>): MergeProgress => ({
+    pullRequest,
+    step: 'review',
+    detail: null,
+    risk: null,
+    at: ago(1),
+    ...over,
+  });
+  const pr = (repository: string, n: number) => `https://github.com/${repository}/pull/${n}`;
   return {
     generatedAt: now.toISOString(),
-    reconcileIntervalSeconds: 360,
+    reconcileIntervalSeconds: 180,
     repositories: [
       {
         repositoryId: 1,
@@ -33,9 +59,34 @@ export function demoQueue(now = new Date()): QueueView {
             url: 'https://github.com/munichdeveloper/backofficer/issues/214',
             stage: 'running',
             status: 'running',
-            attempts: { used: 1, max: 3 },
+            attempts: { used: 2, max: 3 },
             since: ago(14),
             run: { executionId: 'a'.repeat(32), phase: 'running', startedAt: ago(14) },
+            runs: [
+              run({ startedAt: ago(70), outcome: 'blocked', validation: 'failed' }),
+              run({
+                kind: 'rework',
+                startedAt: ago(14),
+                active: true,
+                phase: 'running',
+                outcome: null,
+                validation: null,
+                model: 'claude-opus-5-5',
+              }),
+            ],
+          },
+          {
+            ...base,
+            issueNumber: 211,
+            title: 'Zahlungsabgleich mit Bankumsätzen',
+            url: 'https://github.com/munichdeveloper/backofficer/issues/211',
+            stage: 'awaiting-pr',
+            status: 'awaiting-pr',
+            attempts: { used: 1, max: 3 },
+            since: ago(35),
+            pullRequests: [pr('munichdeveloper/backofficer', 81)],
+            runs: [run({ startedAt: ago(48) })],
+            merge: merge(81, { step: 'review', risk: 'medium' }),
           },
           {
             ...base,
@@ -50,17 +101,6 @@ export function demoQueue(now = new Date()): QueueView {
           },
           {
             ...base,
-            issueNumber: 219,
-            title: 'Belegsuche nach Betrag',
-            url: 'https://github.com/munichdeveloper/backofficer/issues/219',
-            stage: 'queued',
-            status: 'ready',
-            since: ago(25),
-            waitsForSlot: true,
-            dependsOn: [216],
-          },
-          {
-            ...base,
             issueNumber: 208,
             title: 'Dark Mode für das Dashboard',
             url: 'https://github.com/munichdeveloper/backofficer/issues/208',
@@ -68,7 +108,27 @@ export function demoQueue(now = new Date()): QueueView {
             status: 'awaiting-pr',
             attempts: { used: 1, max: 3 },
             since: ago(180),
-            pullRequests: ['https://github.com/munichdeveloper/backofficer/pull/77'],
+            pullRequests: [pr('munichdeveloper/backofficer', 77)],
+            runs: [run({ startedAt: ago(200) })],
+            merge: merge(77, {
+              step: 'approval-required',
+              risk: 'high',
+              detail: 'Risiko high über der Schwelle medium: menschliche Freigabe nötig.',
+            }),
+          },
+          {
+            ...base,
+            issueNumber: 205,
+            title: 'Kundenportal: Passwort zurücksetzen',
+            url: 'https://github.com/munichdeveloper/backofficer/issues/205',
+            stage: 'closed',
+            status: 'done',
+            attempts: { used: 1, max: 3 },
+            since: ago(95),
+            pullRequests: [pr('munichdeveloper/backofficer', 76)],
+            runs: [run({ startedAt: ago(160) })],
+            merge: merge(76, { step: 'merged', risk: 'low', at: ago(95) }),
+            mergedAt: ago(95),
           },
         ],
       },
@@ -89,7 +149,29 @@ export function demoQueue(now = new Date()): QueueView {
             status: 'ready',
             attempts: { used: 1, max: 3 },
             since: ago(9),
-            reason: 'CHECK_FAILED',
+            pullRequests: [pr('munichdeveloper/controla', 151)],
+            runs: [run({ startedAt: ago(50), model: 'claude-sonnet-5-5' })],
+            merge: merge(151, {
+              step: 'review-rejected',
+              detail: 'KI-Entscheidung: request_changes.',
+              risk: 'medium',
+            }),
+          },
+          {
+            ...base,
+            issueNumber: 143,
+            title: 'Belege per Drag-and-drop hochladen',
+            url: 'https://github.com/munichdeveloper/controla/issues/143',
+            stage: 'awaiting-pr',
+            status: 'awaiting-pr',
+            attempts: { used: 1, max: 3 },
+            since: ago(12),
+            pullRequests: [pr('munichdeveloper/controla', 152)],
+            runs: [run({ startedAt: ago(30) })],
+            merge: merge(152, {
+              step: 'checks',
+              detail: 'Pflichtprüfung test fehlt oder läuft noch.',
+            }),
           },
           {
             ...base,
@@ -102,8 +184,43 @@ export function demoQueue(now = new Date()): QueueView {
           },
           {
             ...base,
-            issueNumber: 131,
+            issueNumber: 137,
             title: 'Budgetwarnungen per Mail',
+            url: 'https://github.com/munichdeveloper/controla/issues/137',
+            stage: 'failed',
+            status: 'failed',
+            attempts: { used: 3, max: 3 },
+            since: ago(400),
+            reason: 'WORKER_TIMEOUT',
+            runs: [
+              run({
+                startedAt: ago(600),
+                outcome: 'failed',
+                validation: null,
+                error: 'WORKER_TIMEOUT',
+              }),
+              run({
+                kind: 'retry',
+                startedAt: ago(520),
+                outcome: 'failed',
+                validation: null,
+                error: 'WORKER_TIMEOUT',
+                model: 'claude-opus-5-5',
+              }),
+              run({
+                kind: 'retry',
+                startedAt: ago(450),
+                outcome: 'failed',
+                validation: null,
+                error: 'WORKER_TIMEOUT',
+                model: 'claude-opus-5-5',
+              }),
+            ],
+          },
+          {
+            ...base,
+            issueNumber: 131,
+            title: 'Mandantenfähige Auswertungen',
             url: 'https://github.com/munichdeveloper/controla/issues/131',
             stage: 'blocked',
             status: 'blocked',
