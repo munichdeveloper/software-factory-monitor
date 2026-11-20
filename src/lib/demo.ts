@@ -239,6 +239,50 @@ export function demoQueue(now = new Date()): QueueView {
         entries: [],
       },
     ],
+    events: [
+      {
+        id: 1,
+        repository: 'munichdeveloper/backofficer',
+        type: 'validation_failed',
+        issueNumber: 211,
+        executionId: null,
+        at: ago(40),
+        recordedAt: ago(39),
+        data: {
+          reason: 'CHECK_FAILED',
+          steps: [{ name: 'browser', exitCode: 1 }],
+          validationRunId: 1,
+          attempt: 0,
+          next: 'rework',
+        },
+      },
+      {
+        id: 2,
+        repository: 'munichdeveloper/controla',
+        type: 'attention_required',
+        issueNumber: 140,
+        executionId: null,
+        at: ago(25),
+        recordedAt: ago(24),
+        data: { reason: 'retries_exhausted', attempts: 3, error: 'CHECK_FAILED' },
+      },
+      {
+        id: 3,
+        repository: 'munichdeveloper/controla',
+        type: 'start_refused',
+        issueNumber: 143,
+        executionId: null,
+        at: ago(12),
+        recordedAt: ago(11),
+        data: {
+          code: 'EXECUTOR_WRAPPER_RELEASE_MISMATCH',
+          refusals: 1,
+          retryAt: null,
+          repositoryWide: true,
+          stage: 'preflight',
+        },
+      },
+    ],
   };
 }
 
