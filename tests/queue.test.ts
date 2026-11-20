@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { demoQueue } from '../src/lib/demo';
-import { fetchQueue, groupOf, summary } from '../src/lib/queue';
+import { fetchQueue, groupOf, nextReconcile, summary } from '../src/lib/queue';
 import { relative } from '../src/lib/time';
 
 const token = 'q'.repeat(32);
@@ -66,5 +66,41 @@ describe('relative time', () => {
     expect(relative('2026-11-15T12:00:00Z', now)).toBe('vor 3 Tagen');
     expect(relative('2026-11-18T12:06:00Z', now)).toBe('in 6 Min.');
     expect(relative(null, now)).toBe('–');
+  });
+});
+
+describe('next reconciliation in the header (software-factory#197)', () => {
+  const now = Date.parse('2026-11-20T16:30:00Z');
+  const base = demoQueue(new Date(now));
+  const repo = { ...base.repositories[0]!, observedAt: '2026-11-20T16:26:00Z' };
+  it('takes the next pass from the broker instead of observedAt plus the interval', () => {
+    const view = {
+      ...base,
+      reconcileIntervalSeconds: 180,
+      passStartedAt: null,
+      nextPassAt: '2026-11-20T16:32:30Z',
+    };
+    expect(nextReconcile(view, repo, now)).toBe('nächster Durchlauf in 2 Min.');
+    expect(nextReconcile({ ...view, nextPassAt: '2026-11-20T16:29:50Z' }, repo, now)).toBe(
+      'nächster Durchlauf gleich',
+    );
+    expect(
+      nextReconcile(
+        { ...view, passStartedAt: '2026-11-20T16:29:00Z', nextPassAt: null },
+        repo,
+        now,
+      ),
+    ).toBe('Durchlauf läuft');
+    expect(nextReconcile({ ...view, nextPassAt: null }, repo, now)).toBeNull();
+  });
+  it('never names a past time for a broker that does not report its schedule yet', () => {
+    const legacy = { ...base, reconcileIntervalSeconds: 180 };
+    delete (legacy as { nextPassAt?: unknown }).nextPassAt;
+    delete (legacy as { passStartedAt?: unknown }).passStartedAt;
+    // observedAt 4 minutes ago + 3 minutes: the old header said "nächster vor 1 Min.".
+    expect(nextReconcile(legacy, repo, now)).toBeNull();
+    expect(nextReconcile(legacy, { ...repo, observedAt: '2026-11-20T16:29:00Z' }, now)).toBe(
+      'nächster frühestens in 2 Min.',
+    );
   });
 });

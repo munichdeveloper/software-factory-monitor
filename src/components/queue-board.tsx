@@ -4,10 +4,12 @@ import type { Loaded } from '@/lib/load';
 import {
   groupOf,
   groups,
+  nextReconcile,
   summary,
   type Group,
   type QueueEntry,
   type QueueRepository,
+  type QueueView,
 } from '@/lib/queue';
 import { errorLabels, groupLabels, phaseLabels, reasonLabels, stageLabels } from '@/lib/labels';
 import { clock, relative } from '@/lib/time';
@@ -116,21 +118,18 @@ function Entry({
 function Repository({
   repository,
   filter,
-  interval,
+  view,
   now,
 }: {
   repository: QueueRepository;
   filter: Group | null;
-  interval: number | null;
+  view: QueueView;
   now: number;
 }) {
   const entries = repository.entries.filter((e) => !filter || groupOf(e.stage) === filter);
   // Positions count only what still waits to be started, in the broker's order.
   let waiting = 0;
-  const next =
-    repository.observedAt && interval
-      ? new Date(Date.parse(repository.observedAt) + interval * 1000).toISOString()
-      : null;
+  const next = nextReconcile(view, repository, now);
   return (
     <section className="repository">
       <header>
@@ -149,7 +148,7 @@ function Repository({
           title={repository.observedAt ? clock(repository.observedAt) : undefined}
         >
           {repository.observedAt
-            ? `Abgleich ${relative(repository.observedAt, now)}${next ? `, nächster ${relative(next, now)}` : ''}`
+            ? `Abgleich ${relative(repository.observedAt, now)}${next ? `, ${next}` : ''}`
             : 'Noch kein Abgleich seit dem Start der Laufzeit'}
         </span>
       </header>
@@ -278,7 +277,7 @@ export function QueueBoard({ initial, login }: { initial: Loaded; login: string 
           key={repository.repositoryId}
           repository={repository}
           filter={filter}
-          interval={view?.reconcileIntervalSeconds ?? null}
+          view={view!}
           now={now}
         />
       ))}
