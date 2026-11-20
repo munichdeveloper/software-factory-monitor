@@ -1,3 +1,4 @@
+import { relative } from './time';
 import { z } from 'zod';
 import { runtimeEventSchema } from './events';
 
@@ -71,6 +72,9 @@ const repositorySchema = z.object({
 export const queueViewSchema = z.object({
   generatedAt: z.string(),
   reconcileIntervalSeconds: z.number().int().nullable(),
+  // From software-factory#198 on: when the broker's next pass starts, or since when one runs. Older brokers leave them out.
+  passStartedAt: z.string().nullable().optional(),
+  nextPassAt: z.string().nullable().optional(),
   repositories: z.array(repositorySchema),
   /** Runtime events of the last 24 hours (GET /v1/events), added by the monitor; not part of the broker's queue. */
   events: z.array(runtimeEventSchema).default([]),
@@ -138,4 +142,27 @@ export async function fetchQueue(
   const parsed = queueViewSchema.safeParse(await response.json().catch(() => null));
   if (!parsed.success) throw new Error('RUNTIME_INVALID_RESPONSE');
   return parsed.data;
+}
+
+/**
+ * What the header says about the next reconciliation (software-factory#197). The broker reconciles the repositories one
+ * after another and starts the next pass an interval after the last one ended, so `observedAt + interval` of a single
+ * repository was too early ("Abgleich vor 4 Min., nächster vor 1 Min."). Webhooks reconcile in between.
+ */
+export function nextReconcile(
+  view: QueueView,
+  repository: QueueRepository,
+  now: number,
+): string | null {
+  if (view.passStartedAt) return 'Durchlauf läuft';
+  if (view.nextPassAt !== undefined) {
+    if (!view.nextPassAt) return null;
+    return Date.parse(view.nextPassAt) > now
+      ? `nächster Durchlauf ${relative(view.nextPassAt, now)}`
+      : 'nächster Durchlauf gleich';
+  }
+  // A broker before software-factory#198: at least never claim a past time.
+  if (!repository.observedAt || !view.reconcileIntervalSeconds) return null;
+  const next = Date.parse(repository.observedAt) + view.reconcileIntervalSeconds * 1000;
+  return next > now ? `nächster frühestens ${relative(new Date(next).toISOString(), now)}` : null;
 }

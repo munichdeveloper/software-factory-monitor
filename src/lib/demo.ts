@@ -43,6 +43,8 @@ export function demoQueue(now = new Date()): QueueView {
   return {
     generatedAt: now.toISOString(),
     reconcileIntervalSeconds: 180,
+    passStartedAt: null,
+    nextPassAt: new Date(now.getTime() + 2 * 60000).toISOString(),
     repositories: [
       {
         repositoryId: 1,
