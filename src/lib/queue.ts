@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { runtimeEventSchema } from './events';
 
 /** The broker's queue view (software-factory, GET /v1/queue). Unknown stages are kept, not rejected. */
 export const stages = [
@@ -71,6 +72,8 @@ export const queueViewSchema = z.object({
   generatedAt: z.string(),
   reconcileIntervalSeconds: z.number().int().nullable(),
   repositories: z.array(repositorySchema),
+  /** Runtime events of the last 24 hours (GET /v1/events), added by the monitor; not part of the broker's queue. */
+  events: z.array(runtimeEventSchema).default([]),
 });
 export type QueueEntry = z.infer<typeof entrySchema>;
 export type QueueRun = z.infer<typeof runSchema>;

@@ -11,6 +11,7 @@ import {
   type QueueRepository,
 } from '@/lib/queue';
 import { errorLabels, groupLabels, reasonLabels, stageLabels } from '@/lib/labels';
+import { eventLabel, latestByIssue, repositoryRefusal, type RuntimeEvent } from '@/lib/events';
 import { clock, relative } from '@/lib/time';
 import { pipeline, runKindLabels, stepStateLabels, type StepState } from '@/lib/pipeline';
 
@@ -110,15 +111,27 @@ function Entry({
   repository,
   position,
   now,
+  event,
 }: {
   entry: QueueEntry;
   repository: string;
   position: number | null;
   now: number;
+  event: RuntimeEvent | undefined;
 }) {
   const group = groupOf(entry.stage);
   const details: ReactNode[] = [];
   if (entry.reason) details.push(reasonLabels[entry.reason] ?? entry.reason);
+  if (event)
+    details.push(
+      <span
+        key="event"
+        className={event.type === 'attention_required' ? 'attention' : undefined}
+        title={clock(event.at)}
+      >
+        {eventLabel(event)} ({relative(event.at, now)})
+      </span>,
+    );
   if (entry.retryAt) details.push(`Nächster Startversuch spätestens ${clock(entry.retryAt)}`);
   if (entry.dependsOn.length)
     details.push(
@@ -183,12 +196,16 @@ function Repository({
   filter,
   interval,
   now,
+  events,
 }: {
   repository: QueueRepository;
   filter: Group | null;
   interval: number | null;
   now: number;
+  events: RuntimeEvent[];
 }) {
+  const latest = latestByIssue(events, repository.repository);
+  const refusal = repositoryRefusal(events, repository.repository);
   // Finished tasks leave the list at once; the "Erledigt (24 h)" tile still counts them and shows them when selected.
   const entries = repository.entries.filter((e) =>
     filter ? groupOf(e.stage) === filter : groupOf(e.stage) !== 'done',
@@ -228,6 +245,12 @@ function Repository({
           Stand davor.
         </p>
       )}
+      {refusal && (
+        <p className="alert">
+          {eventLabel(refusal)} ({relative(refusal.at, now)}). Das betrifft alle Issues dieses
+          Repositories; die Factory startet wieder, sobald die Ursache behoben ist.
+        </p>
+      )}
       {entries.length ? (
         <ol className="entries">
           {entries.map((entry) => (
@@ -237,6 +260,7 @@ function Repository({
               repository={repository.repository}
               position={groupOf(entry.stage) === 'waiting' ? ++waiting : null}
               now={now}
+              event={latest.get(entry.issueNumber)}
             />
           ))}
         </ol>
@@ -352,6 +376,7 @@ export function QueueBoard({ initial, login }: { initial: Loaded; login: string 
           filter={filter}
           interval={view?.reconcileIntervalSeconds ?? null}
           now={now}
+          events={view?.events ?? []}
         />
       ))}
     </main>

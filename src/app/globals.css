@@ -791,3 +791,7 @@ code {
     grid-column: 1 / -1;
   }
 }
+.details .attention {
+  color: var(--stuck);
+  font-weight: 600;
+}

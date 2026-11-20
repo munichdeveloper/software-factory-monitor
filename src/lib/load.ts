@@ -1,6 +1,7 @@
 import { fetchAnalytics, type AnalyticsView } from './analytics';
 import { demoAnalytics, demoQueue } from './demo';
 import { demoMode, env } from './env';
+import { fetchEvents } from './events';
 import { fetchQueue, type QueueView } from './queue';
 
 export type Loaded = { view: QueueView; error: null } | { view: null; error: string };
@@ -8,10 +9,11 @@ export type Loaded = { view: QueueView; error: null } | { view: null; error: str
 export async function loadQueue(): Promise<Loaded> {
   if (demoMode()) return { view: demoQueue(), error: null };
   try {
-    return {
-      view: await fetchQueue(env().FACTORY_RUNTIME_URL, env().FACTORY_MONITOR_TOKEN),
-      error: null,
-    };
+    const [view, events] = await Promise.all([
+      fetchQueue(env().FACTORY_RUNTIME_URL, env().FACTORY_MONITOR_TOKEN),
+      fetchEvents(env().FACTORY_RUNTIME_URL, env().FACTORY_MONITOR_TOKEN, new Date()),
+    ]);
+    return { view: { ...view, events }, error: null };
   } catch (error) {
     const code =
       error instanceof Error && /^[A-Z_]+$/.test(error.message) ? error.message : 'RUNTIME_FAILED';
