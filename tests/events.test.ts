@@ -39,6 +39,9 @@ describe('runtime events', () => {
     expect(
       eventLabel(event(1, 'start_refused', 't', { code: 'EXECUTOR_WRAPPER_RELEASE_MISMATCH' })),
     ).toBe('Start abgelehnt: Release passt nicht, wartet auf Rollout');
+    expect(eventLabel(event(1, 'rescue_started', 't', { tier: 3, attempt: 2 }))).toBe(
+      'Rettungsversuch mit stärkerem Modell läuft',
+    );
     expect(eventLabel(event(1, 'attention_required', 't', { reason: 'retries_exhausted' }))).toBe(
       'Braucht dich: alle Versuche aufgebraucht',
     );
