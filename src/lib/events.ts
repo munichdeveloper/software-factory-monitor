@@ -43,7 +43,7 @@ export function eventLabel(e: RuntimeEvent): string {
   switch (e.type) {
     case 'validation_failed': {
       const steps = Array.isArray(e.data.steps) ? e.data.steps.map((s) => s.name).join(', ') : '';
-      return `Validierung: ${steps || text(e.data.reason)} fehlgeschlagen${e.data.next === 'rework' ? ', Nachbesserung folgt' : ''}`;
+      return `Validierung: ${steps || text(e.data.reason)} fehlgeschlagen${e.data.next === 'rework' ? ', Nachbesserung folgt' : e.data.next === 'rescue' ? ', Rettungsversuch folgt' : ''}`;
     }
     case 'start_refused':
       return `Start abgelehnt: ${refusalLabels[code] ?? code}`;
@@ -51,6 +51,8 @@ export function eventLabel(e: RuntimeEvent): string {
       return `Start läuft wieder (${e.data.trigger === 'cause_cleared' ? 'Ursache behoben' : e.data.trigger === 'manual' ? 'nach Änderung' : 'nach Wartezeit'})`;
     case 'run_failed':
       return `Lauf fehlgeschlagen${text(e.data.error) ? `: ${text(e.data.error)}` : ''}${e.data.infrastructure ? ' (Infrastruktur)' : ''}`;
+    case 'rescue_started':
+      return 'Rettungsversuch mit stärkerem Modell läuft';
     case 'attention_required':
       return `Braucht dich: ${attentionLabels[text(e.data.reason)] ?? text(e.data.reason)}`;
     default:
