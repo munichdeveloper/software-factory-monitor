@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Loaded } from '@/lib/load';
 import {
@@ -11,8 +12,10 @@ import {
   type QueueRepository,
   type QueueView,
 } from '@/lib/queue';
-import { errorLabels, groupLabels, phaseLabels, reasonLabels, stageLabels } from '@/lib/labels';
+import { errorLabels, groupLabels, reasonLabels, stageLabels } from '@/lib/labels';
+import { eventLabel, latestByIssue, repositoryRefusal, type RuntimeEvent } from '@/lib/events';
 import { clock, relative } from '@/lib/time';
+import { pipeline, runKindLabels, stepStateLabels, type StepState } from '@/lib/pipeline';
 
 const refreshSeconds = 30;
 const priorityLabels = { high: 'Hoch', normal: 'Normal', low: 'Niedrig' } as const;
@@ -26,6 +29,69 @@ function repoLink(repository: string, issue: number) {
 }
 function prNumber(url: string) {
   return `#${url.split('/').pop()}`;
+}
+
+const stepIcons: Record<StepState, string> = {
+  done: '✓',
+  current: '',
+  waiting: '…',
+  person: '!',
+  failed: '✕',
+  pending: '',
+  skipped: '–',
+};
+const runOutcome = (run: QueueEntry['runs'][number]) =>
+  run.active
+    ? 'läuft'
+    : run.validation === 'passed' && run.outcome === 'success'
+      ? 'validiert'
+      : run.validation === 'failed'
+        ? 'Validierung fehlgeschlagen'
+        : run.infrastructure
+          ? 'Runner-Fehler'
+          : ((
+              {
+                success: 'erfolgreich',
+                blocked: 'abgebrochen',
+                failed: 'fehlgeschlagen',
+                cancelled: 'abgebrochen',
+                needs_approval: 'fragt nach Freigabe',
+              } as Record<string, string>
+            )[run.outcome ?? ''] ?? 'unbekannt');
+
+/** The task's way through the Factory: finished steps ticked, the current one highlighted, the rest still open. */
+function Pipeline({ entry }: { entry: QueueEntry }) {
+  const steps = pipeline(entry);
+  return (
+    <div className="pipeline-wrap">
+      <ol className="pipeline" aria-label="Pipeline">
+        {steps.map((step) => (
+          <li
+            key={step.key}
+            className={`step ${step.state}`}
+            title={`${step.label}: ${stepStateLabels[step.state]}${step.note ? ` – ${step.note}` : ''}`}
+          >
+            <span className="dot" aria-hidden="true">
+              {stepIcons[step.state]}
+            </span>
+            <span className="step-text">
+              <span className="step-label">{step.label}</span>
+              <span className="step-note">{step.note ?? stepStateLabels[step.state]}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+      {entry.runs.length > 1 && (
+        <ol className="runs" aria-label="Versuche">
+          {entry.runs.map((run, i) => (
+            <li key={run.executionId} className={run.active ? 'active' : ''}>
+              {i + 1}. {runKindLabels[run.kind] ?? run.kind}: {runOutcome(run)}
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
 }
 
 function Slots({ slots }: { slots: QueueRepository['slots'] }) {
@@ -47,16 +113,27 @@ function Entry({
   repository,
   position,
   now,
+  event,
 }: {
   entry: QueueEntry;
   repository: string;
   position: number | null;
   now: number;
+  event: RuntimeEvent | undefined;
 }) {
   const group = groupOf(entry.stage);
   const details: ReactNode[] = [];
-  if (entry.run?.phase) details.push(`Phase: ${phaseLabels[entry.run.phase] ?? entry.run.phase}`);
   if (entry.reason) details.push(reasonLabels[entry.reason] ?? entry.reason);
+  if (event)
+    details.push(
+      <span
+        key="event"
+        className={event.type === 'attention_required' ? 'attention' : undefined}
+        title={clock(event.at)}
+      >
+        {eventLabel(event)} ({relative(event.at, now)})
+      </span>,
+    );
   if (entry.retryAt) details.push(`Nächster Startversuch spätestens ${clock(entry.retryAt)}`);
   if (entry.dependsOn.length)
     details.push(
@@ -100,6 +177,7 @@ function Entry({
             ))}
           </div>
         )}
+        <Pipeline entry={entry} />
       </div>
       <span className={`badge ${group ?? ''}`}>{stageText(entry)}</span>
       <span className="meta">
@@ -120,13 +198,20 @@ function Repository({
   filter,
   view,
   now,
+  events,
 }: {
   repository: QueueRepository;
   filter: Group | null;
   view: QueueView;
   now: number;
+  events: RuntimeEvent[];
 }) {
-  const entries = repository.entries.filter((e) => !filter || groupOf(e.stage) === filter);
+  const latest = latestByIssue(events, repository.repository);
+  const refusal = repositoryRefusal(events, repository.repository);
+  // Finished tasks leave the list at once; the "Erledigt (24 h)" tile still counts them and shows them when selected.
+  const entries = repository.entries.filter((e) =>
+    filter ? groupOf(e.stage) === filter : groupOf(e.stage) !== 'done',
+  );
   // Positions count only what still waits to be started, in the broker's order.
   let waiting = 0;
   const next = nextReconcile(view, repository, now);
@@ -159,6 +244,12 @@ function Repository({
           Stand davor.
         </p>
       )}
+      {refusal && (
+        <p className="alert">
+          {eventLabel(refusal)} ({relative(refusal.at, now)}). Das betrifft alle Issues dieses
+          Repositories; die Factory startet wieder, sobald die Ursache behoben ist.
+        </p>
+      )}
       {entries.length ? (
         <ol className="entries">
           {entries.map((entry) => (
@@ -168,6 +259,7 @@ function Repository({
               repository={repository.repository}
               position={groupOf(entry.stage) === 'waiting' ? ++waiting : null}
               now={now}
+              event={latest.get(entry.issueNumber)}
             />
           ))}
         </ol>
@@ -222,6 +314,10 @@ export function QueueBoard({ initial, login }: { initial: Loaded; login: string 
     <main className="board">
       <header className="top">
         <div>
+          <nav className="tabs" aria-label="Ansicht">
+            <span aria-current="page">Queue</span>
+            <Link href="/analytics">Kosten</Link>
+          </nav>
           <h1>Factory-Queue</h1>
           <p className="muted">
             {view ? `Stand ${relative(view.generatedAt, now)} · ` : ''}aktualisiert sich alle{' '}
@@ -279,6 +375,7 @@ export function QueueBoard({ initial, login }: { initial: Loaded; login: string 
           filter={filter}
           view={view!}
           now={now}
+          events={view?.events ?? []}
         />
       ))}
     </main>

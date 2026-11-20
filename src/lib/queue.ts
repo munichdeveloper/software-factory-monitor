@@ -1,5 +1,6 @@
 import { relative } from './time';
 import { z } from 'zod';
+import { runtimeEventSchema } from './events';
 
 /** The broker's queue view (software-factory, GET /v1/queue). Unknown stages are kept, not rejected. */
 export const stages = [
@@ -17,6 +18,27 @@ export const stages = [
 ] as const;
 export type Stage = (typeof stages)[number];
 
+/** One coding attempt (broker 0.18+); older brokers send none. */
+const runSchema = z.object({
+  executionId: z.string(),
+  kind: z.string(),
+  startedAt: z.string(),
+  phase: z.string().nullable(),
+  active: z.boolean(),
+  outcome: z.string().nullable(),
+  validation: z.string().nullable(),
+  error: z.string().nullable(),
+  infrastructure: z.boolean(),
+  model: z.string().nullable(),
+});
+/** Where the broker's merge pass last left the task's pull request. */
+const mergeSchema = z.object({
+  pullRequest: z.number().int(),
+  step: z.string(),
+  detail: z.string().nullable(),
+  risk: z.string().nullable(),
+  at: z.string(),
+});
 const entrySchema = z.object({
   issueNumber: z.number().int().positive(),
   title: z.string(),
@@ -34,6 +56,9 @@ const entrySchema = z.object({
   waitsForSlot: z.boolean(),
   dependsOn: z.array(z.number().int()),
   pullRequests: z.array(z.url()),
+  runs: z.array(runSchema).default([]),
+  merge: mergeSchema.nullable().default(null),
+  mergedAt: z.string().nullable().default(null),
 });
 const repositorySchema = z.object({
   repositoryId: z.number().int(),
@@ -51,8 +76,12 @@ export const queueViewSchema = z.object({
   passStartedAt: z.string().nullable().optional(),
   nextPassAt: z.string().nullable().optional(),
   repositories: z.array(repositorySchema),
+  /** Runtime events of the last 24 hours (GET /v1/events), added by the monitor; not part of the broker's queue. */
+  events: z.array(runtimeEventSchema).default([]),
 });
 export type QueueEntry = z.infer<typeof entrySchema>;
+export type QueueRun = z.infer<typeof runSchema>;
+export type MergeProgress = z.infer<typeof mergeSchema>;
 export type QueueRepository = z.infer<typeof repositorySchema>;
 export type QueueView = z.infer<typeof queueViewSchema>;
 
@@ -62,6 +91,7 @@ export const groups = {
   waiting: ['retry', 'queued'],
   person: ['awaiting-approval', 'awaiting-grant', 'awaiting-pr'],
   stuck: ['refused', 'blocked', 'failed'],
+  done: ['closed'],
 } as const satisfies Record<string, readonly Stage[]>;
 export type Group = keyof typeof groups;
 
@@ -71,7 +101,7 @@ export function groupOf(stage: string): Group | null {
   return null;
 }
 export function summary(view: QueueView): Record<Group, number> {
-  const counts: Record<Group, number> = { active: 0, waiting: 0, person: 0, stuck: 0 };
+  const counts: Record<Group, number> = { active: 0, waiting: 0, person: 0, stuck: 0, done: 0 };
   for (const repository of view.repositories)
     for (const entry of repository.entries) {
       const group = groupOf(entry.stage);

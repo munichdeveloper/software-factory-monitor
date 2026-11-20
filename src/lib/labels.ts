@@ -10,13 +10,14 @@ export const stageLabels: Record<string, string> = {
   blocked: 'Blockiert',
   'awaiting-pr': 'PR wartet auf Review',
   failed: 'Fehlgeschlagen',
-  closed: 'Geschlossen',
+  closed: 'Erledigt',
 };
 export const groupLabels = {
   active: 'Läuft',
   waiting: 'In Warteschlange',
   person: 'Wartet auf dich',
   stuck: 'Blockiert / fehlgeschlagen',
+  done: 'Erledigt (24 h)',
 } as const;
 export const phaseLabels: Record<string, string> = {
   starting: 'startet',
@@ -48,6 +49,8 @@ export const errorLabels: Record<string, string> = {
   RUNTIME_UNREACHABLE: 'Die Factory-Laufzeit ist nicht erreichbar.',
   RUNTIME_UNAUTHORIZED: 'Die Laufzeit lehnt das Monitor-Token ab (FACTORY_MONITOR_TOKEN prüfen).',
   RUNTIME_QUEUE_UNSUPPORTED: 'Die laufende Factory-Version bietet die Queue-Ansicht noch nicht an.',
+  RUNTIME_ANALYTICS_UNSUPPORTED:
+    'Die laufende Factory-Version bietet die Kosten-Analyse noch nicht an.',
   RUNTIME_INVALID_RESPONSE: 'Die Laufzeit hat eine unerwartete Antwort geliefert.',
   RUNTIME_URL_INSECURE:
     'FACTORY_RUNTIME_URL muss HTTPS sein (außer runtime-broker im internen Netz).',

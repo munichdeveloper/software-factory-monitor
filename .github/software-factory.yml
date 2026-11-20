@@ -1,6 +1,6 @@
 version: 1
 factory:
-  enabled: false # Deploy-only: no manager workflow is installed and every worker is off.
+  enabled: true # Deploy-only: no manager workflow is installed and every worker is off.
   scope: "Deploy the queue monitor; no managed tasks."
 manager:
   workflow: factory-manager.yml

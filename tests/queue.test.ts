@@ -52,7 +52,7 @@ describe('summary', () => {
       issueNumber: 999,
       stage: 'something-new',
     });
-    expect(summary(view)).toEqual({ active: 1, waiting: 3, person: 2, stuck: 1 });
+    expect(summary(view)).toEqual({ active: 1, waiting: 2, person: 4, stuck: 2, done: 1 });
     expect(groupOf('something-new')).toBeNull();
   });
 });
