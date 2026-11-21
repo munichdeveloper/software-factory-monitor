@@ -775,6 +775,22 @@ code {
   max-width: 60rem;
 }
 
+.merge-factory {
+  background: var(--step-coding);
+}
+.merge-human {
+  background: var(--person);
+}
+.kpi.person .value {
+  color: var(--person);
+}
+.metric-weeks .week {
+  grid-template-columns: 4.5rem minmax(0, 1fr) 5.5rem 6.5rem;
+}
+.metric-items .number {
+  font-weight: 600;
+}
+
 @media (max-width: 900px) {
   .panels {
     grid-template-columns: minmax(0, 1fr);

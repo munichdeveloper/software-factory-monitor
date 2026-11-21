@@ -328,6 +328,7 @@ export function QueueBoard({ initial, login }: { initial: Loaded; login: string 
           <nav className="tabs" aria-label="Ansicht">
             <span aria-current="page">Queue</span>
             <Link href="/analytics">Kosten</Link>
+            <Link href="/metrics">Metriken</Link>
           </nav>
           <h1>Factory-Queue</h1>
           <p className="muted">

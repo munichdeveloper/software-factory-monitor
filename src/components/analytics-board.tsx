@@ -294,6 +294,7 @@ export function AnalyticsBoard({
           <nav className="tabs" aria-label="Ansicht">
             <Link href="/">Queue</Link>
             <span aria-current="page">Kosten</span>
+            <Link href="/metrics">Metriken</Link>
           </nav>
           <h1>Factory-Kosten</h1>
           <p className="muted">

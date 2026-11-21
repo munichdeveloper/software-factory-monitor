@@ -1,5 +1,6 @@
 import type { MergeProgress, QueueRun, QueueView } from './queue';
 import type { AnalyticsCall, AnalyticsView } from './analytics';
+import type { MetricsItem, MetricsView } from './metrics';
 
 /** Sample data for MONITOR_DEMO=1 (development only) and tests. */
 export function demoQueue(now = new Date()): QueueView {
@@ -464,5 +465,143 @@ export function demoAnalytics(now = new Date()): AnalyticsView {
         ],
       },
     ],
+  };
+}
+
+/** Sample metrics for MONITOR_DEMO=1 (development only) and tests. */
+export function demoMetrics(now = new Date()): MetricsView {
+  const hour = 3600000;
+  const ago = (hours: number) => new Date(now.getTime() - hours * hour).toISOString();
+  const item = (over: Partial<MetricsItem>): MetricsItem => ({
+    repository: 'munichdeveloper/controla',
+    issueNumber: 140,
+    title: 'CSV-Export der Alarme',
+    url: 'https://github.com/munichdeveloper/controla/issues/140',
+    prNumber: 141,
+    mergedBy: 'factory',
+    qualifiedAt: ago(30),
+    handoverAt: null,
+    mergedAt: ago(27),
+    leadMs: 3 * hour,
+    waitMs: null,
+    pickupMs: 4 * 60000,
+    codingRuns: 1,
+    failedCodingRuns: 0,
+    codingMs: 38 * 60000,
+    reviews: 1,
+    costUsd: 2.41,
+    ...over,
+  });
+  const items = [
+    item({}),
+    item({
+      repository: 'munichdeveloper/backofficer',
+      issueNumber: 88,
+      title: 'Rechnungsnummern fortlaufend vergeben',
+      url: 'https://github.com/munichdeveloper/backofficer/issues/88',
+      prNumber: 90,
+      qualifiedAt: ago(60),
+      mergedAt: ago(52),
+      leadMs: 8 * hour,
+      pickupMs: 25 * 60000,
+      codingRuns: 3,
+      failedCodingRuns: 2,
+      codingMs: 2 * hour,
+      reviews: 2,
+      costUsd: 9.8,
+    }),
+    item({
+      issueNumber: 136,
+      title: 'Rollen und Rechte für Instanzen',
+      url: 'https://github.com/munichdeveloper/controla/issues/136',
+      prNumber: 137,
+      mergedBy: 'human',
+      qualifiedAt: ago(80),
+      handoverAt: ago(76),
+      mergedAt: ago(62),
+      leadMs: 18 * hour,
+      waitMs: 14 * hour,
+      pickupMs: 12 * 60000,
+      codingRuns: 2,
+      failedCodingRuns: 1,
+      codingMs: 75 * 60000,
+      reviews: 1,
+      costUsd: 6.1,
+    }),
+    item({
+      issueNumber: 131,
+      title: 'Alarmregeln pro Instanz',
+      url: 'https://github.com/munichdeveloper/controla/issues/131',
+      prNumber: 133,
+      qualifiedAt: ago(150),
+      mergedAt: ago(148),
+      leadMs: 2 * hour,
+      pickupMs: 3 * 60000,
+      codingMs: 52 * 60000,
+      costUsd: 1.95,
+    }),
+  ];
+  const week = (hoursAgo: number) => {
+    const d = new Date(now.getTime() - hoursAgo * hour),
+      day = (d.getUTCDay() + 6) % 7;
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - day))
+      .toISOString()
+      .slice(0, 10);
+  };
+  return {
+    generatedAt: now.toISOString(),
+    from: new Date(now.getTime() - 30 * 86400000).toISOString(),
+    to: now.toISOString(),
+    repository: null,
+    repositories: ['munichdeveloper/backofficer', 'munichdeveloper/controla'],
+    leadTime: {
+      factory: { count: 3, meanMs: (13 * hour) / 3, medianMs: 3 * hour, p90Ms: 7 * hour },
+      human: {
+        count: 1,
+        meanMs: 18 * hour,
+        medianMs: 18 * hour,
+        p90Ms: 18 * hour,
+        wait: { count: 1, meanMs: 14 * hour, medianMs: 14 * hour, p90Ms: 14 * hour },
+      },
+      unknownIntake: 0,
+    },
+    flow: {
+      merged: 4,
+      mergedByFactory: 3,
+      mergedByHuman: 1,
+      automationRate: 0.75,
+      firstPassYield: 0.5,
+      codingRunsPerMerge: 1.75,
+      failedCodingRuns: 3,
+      codingRuns: 7,
+      closedWithoutMerge: 1,
+      pickup: { count: 4, meanMs: 11 * 60000, medianMs: 8 * 60000, p90Ms: 21 * 60000 },
+      codingRun: { count: 7, meanMs: 33 * 60000, medianMs: 29 * 60000, p90Ms: 55 * 60000 },
+      codingShare: 0.3,
+      reviewsPerMerge: 1.25,
+    },
+    weekly: [
+      { week: week(150), merged: 1, mergedByFactory: 1, leadMedianMs: 2 * hour },
+      { week: week(27), merged: 3, mergedByFactory: 2, leadMedianMs: 5.5 * hour },
+    ].filter((w, i, all) => all.findIndex((x) => x.week === w.week) === i),
+    repositoryRows: [
+      {
+        repository: 'munichdeveloper/backofficer',
+        merged: 1,
+        mergedByFactory: 1,
+        leadMedianMs: 8 * hour,
+        firstPassYield: 0,
+        costPerMergedUsd: 9.8,
+      },
+      {
+        repository: 'munichdeveloper/controla',
+        merged: 3,
+        mergedByFactory: 2,
+        leadMedianMs: 2.5 * hour,
+        firstPassYield: 0.67,
+        costPerMergedUsd: 3.49,
+      },
+    ],
+    items,
   };
 }
