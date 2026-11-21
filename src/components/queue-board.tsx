@@ -13,7 +13,14 @@ import {
   type QueueView,
 } from '@/lib/queue';
 import { errorLabels, groupLabels, reasonLabels, stageLabels } from '@/lib/labels';
-import { eventLabel, latestByIssue, repositoryRefusal, type RuntimeEvent } from '@/lib/events';
+import {
+  eventLabel,
+  issueEvent,
+  latestByIssue,
+  repositoryRefusal,
+  type LiveView,
+  type RuntimeEvent,
+} from '@/lib/events';
 import { clock, relative } from '@/lib/time';
 import { pipeline, runKindLabels, stepStateLabels, type StepState } from '@/lib/pipeline';
 
@@ -207,7 +214,11 @@ function Repository({
   events: RuntimeEvent[];
 }) {
   const latest = latestByIssue(events, repository.repository);
-  const refusal = repositoryRefusal(events, repository.repository);
+  const live: LiveView = {
+    observedAt: repository.observedAt,
+    stages: new Map(repository.entries.map((e) => [e.issueNumber, e.stage])),
+  };
+  const refusal = repositoryRefusal(events, repository.repository, live);
   // Finished tasks leave the list at once; the "Erledigt (24 h)" tile still counts them and shows them when selected.
   const entries = repository.entries.filter((e) =>
     filter ? groupOf(e.stage) === filter : groupOf(e.stage) !== 'done',
@@ -259,7 +270,7 @@ function Repository({
               repository={repository.repository}
               position={groupOf(entry.stage) === 'waiting' ? ++waiting : null}
               now={now}
-              event={latest.get(entry.issueNumber)}
+              event={issueEvent(latest, entry.issueNumber, live)}
             />
           ))}
         </ol>
