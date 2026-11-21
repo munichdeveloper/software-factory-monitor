@@ -1,7 +1,8 @@
 import { fetchAnalytics, type AnalyticsView } from './analytics';
-import { demoAnalytics, demoQueue } from './demo';
+import { demoAnalytics, demoMetrics, demoQueue } from './demo';
 import { demoMode, env } from './env';
 import { fetchEvents } from './events';
+import { fetchMetrics, type MetricsView } from './metrics';
 import { fetchQueue, type QueueView } from './queue';
 
 export type Loaded = { view: QueueView; error: null } | { view: null; error: string };
@@ -31,6 +32,25 @@ export async function loadAnalytics(query: {
   try {
     return {
       view: await fetchAnalytics(env().FACTORY_RUNTIME_URL, env().FACTORY_MONITOR_TOKEN, query),
+      error: null,
+    };
+  } catch (error) {
+    const code =
+      error instanceof Error && /^[A-Z_]+$/.test(error.message) ? error.message : 'RUNTIME_FAILED';
+    return { view: null, error: code };
+  }
+}
+
+export type LoadedMetrics = { view: MetricsView; error: null } | { view: null; error: string };
+/** The lead-time and flow metrics of a period, or the fixed code of why they could not be read. */
+export async function loadMetrics(query: {
+  days: number;
+  repository: string | null;
+}): Promise<LoadedMetrics> {
+  if (demoMode()) return { view: demoMetrics(), error: null };
+  try {
+    return {
+      view: await fetchMetrics(env().FACTORY_RUNTIME_URL, env().FACTORY_MONITOR_TOKEN, query),
       error: null,
     };
   } catch (error) {
