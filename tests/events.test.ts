@@ -3,6 +3,7 @@ import {
   eventLabel,
   fetchEvents,
   latestByIssue,
+  issueEvent,
   repositoryRefusal,
   type RuntimeEvent,
 } from '../src/lib/events';
@@ -62,6 +63,23 @@ describe('runtime events', () => {
       ),
     ).toBeNull();
     expect(repositoryRefusal(events, 'other/repo')).toBeNull();
+  });
+  it('drops a refusal the live view no longer shows (geschaeftsideen-web#54)', () => {
+    const refused = event(1, 'start_refused', '2026-11-21T16:27:02Z', {
+      code: 'EXECUTOR_WRAPPER_RELEASE_MISMATCH',
+      repositoryWide: true,
+    });
+    const latest = latestByIssue([refused], 'o/r');
+    const before = { observedAt: '2026-11-21T16:30:00Z', stages: new Map([[7, 'refused']]) };
+    const after = { observedAt: '2026-11-21T20:00:00Z', stages: new Map([[7, 'awaiting-pr']]) };
+    const stale = { observedAt: '2026-11-21T16:00:00Z', stages: new Map([[7, 'awaiting-pr']]) };
+    expect(repositoryRefusal([refused], 'o/r', before)!.id).toBe(1);
+    expect(issueEvent(latest, 7, before)!.id).toBe(1);
+    expect(repositoryRefusal([refused], 'o/r', after)).toBeNull();
+    expect(issueEvent(latest, 7, after)).toBeUndefined();
+    // A view older than the refusal says nothing about it.
+    expect(repositoryRefusal([refused], 'o/r', stale)!.id).toBe(1);
+    expect(repositoryRefusal([refused], 'o/r')!.id).toBe(1);
   });
   it('reads the last 24 hours and shows nothing where the broker has no events yet', async () => {
     const fetcher = vi.fn(async () =>

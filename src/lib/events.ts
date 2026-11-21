@@ -75,8 +75,27 @@ export function latestByIssue(
   return latest;
 }
 
-/** A refusal that stops the whole repository and that no later start of that repository has followed. */
-export function repositoryRefusal(events: RuntimeEvent[], repository: string): RuntimeEvent | null {
+/**
+ * The broker's live view of one repository: when it was observed and the stage of every listed issue. A refusal the
+ * live view no longer shows is over, even when the broker never recorded a start_resumed (geschaeftsideen-web#54:
+ * the refusal cleared while the issue waited for its grant, so the later start had no refusal to resume from).
+ */
+export interface LiveView {
+  observedAt: string | null;
+  stages: ReadonlyMap<number, string>;
+}
+const outdated = (e: RuntimeEvent, live?: LiveView) =>
+  !!live?.observedAt && live.observedAt > e.at && e.type === 'start_refused';
+
+/**
+ * A refusal that stops the whole repository, that no later start of that repository has followed and that the live
+ * view still shows (some listed issue is in stage refused).
+ */
+export function repositoryRefusal(
+  events: RuntimeEvent[],
+  repository: string,
+  live?: LiveView,
+): RuntimeEvent | null {
   const own = events
     .filter((e) => e.repository === repository)
     .sort((a, b) => a.at.localeCompare(b.at) || a.id - b.id);
@@ -84,6 +103,7 @@ export function repositoryRefusal(events: RuntimeEvent[], repository: string): R
     .filter((e) => e.type === 'start_refused' && e.data.repositoryWide === true)
     .at(-1);
   if (!refusal) return null;
+  if (outdated(refusal, live) && ![...live!.stages.values()].includes('refused')) return null;
   return own.some(
     (e) =>
       e.at > refusal.at &&
@@ -91,6 +111,17 @@ export function repositoryRefusal(events: RuntimeEvent[], repository: string): R
   )
     ? null
     : refusal;
+}
+
+/** The event to show next to one issue: a refusal is left out once the live view shows the issue past it. */
+export function issueEvent(
+  latest: ReadonlyMap<number, RuntimeEvent>,
+  issueNumber: number,
+  live?: LiveView,
+): RuntimeEvent | undefined {
+  const e = latest.get(issueNumber);
+  if (!e || !outdated(e, live)) return e;
+  return live!.stages.get(issueNumber) === 'refused' ? e : undefined;
 }
 
 /** Events of the last 24 hours from the broker; an empty list where the broker does not offer them yet. */
