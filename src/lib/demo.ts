@@ -116,7 +116,9 @@ export function demoQueue(now = new Date()): QueueView {
             merge: merge(77, {
               step: 'approval-required',
               risk: 'high',
-              detail: 'Risiko high über der Schwelle medium: menschliche Freigabe nötig.',
+              detail:
+                'Risiko high über der Schwelle medium: menschliche Freigabe nötig. Freigeben mit diesem Kommentar am PR: /harness approve ' +
+                'a'.repeat(64),
             }),
           },
           {
