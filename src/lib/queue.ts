@@ -122,6 +122,8 @@ export function pullRequestGroup(pr: QueuePullRequest): Group {
       return 'active';
     case 'gate':
       return 'waiting';
+    // An adopted pull request has no rework worker: a rejected or deferred review waits for a person, it is not stuck.
+    case 'review-rejected':
     case 'handover':
     case 'approval-required':
     case 'stopped':
