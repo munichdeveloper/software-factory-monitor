@@ -128,6 +128,7 @@ export const stepLabels: Record<string, string> = {
   review: 'Merge-Review',
   risk: 'Risikobewertung',
   planner: 'Planung',
+  reconcile: 'Bestandsaufnahme',
 };
 export const stepOrder = ['coding', 'review', 'risk', 'planner'];
 export const selectionLabels: Record<string, string> = {
