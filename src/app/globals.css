@@ -811,3 +811,26 @@ code {
   color: var(--stuck);
   font-weight: 600;
 }
+
+.notice {
+  background: var(--active-bg);
+  color: var(--active);
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  margin: 0.5rem 0;
+}
+.approve {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0;
+}
+button.primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: transparent;
+}
+.approve-sent {
+  color: var(--muted);
+}
