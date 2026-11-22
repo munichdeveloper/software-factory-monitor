@@ -299,5 +299,8 @@ export function pullRequestPipeline(pr: QueuePullRequest): PipelineStep[] {
     return [...steps.values()];
   }
   mergeSteps({ merge: pr.merge, mergedAt: pr.mergedAt, stage: 'awaiting-pr' } as QueueEntry, set);
+  // No rework worker for an adopted pull request: after a rejected or deferred review a person decides.
+  if (pr.merge.step === 'review-rejected')
+    set('review', 'person', join(steps.get('review')!.note, 'Übergabe an dich'));
   return [...steps.values()];
 }

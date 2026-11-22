@@ -125,6 +125,12 @@ describe('adopted pull requests (sf:automerge)', () => {
     expect(prStates(pr('handover'))).toEqual(['checks:done', 'review:person', 'merge:pending']);
     expect(pullRequestGroup(pr('handover'))).toBe('person');
     expect(pullRequestGroup(pr('checks-failed'))).toBe('stuck');
+    expect(pullRequestGroup(pr('review-rejected'))).toBe('person');
+    expect(prStates(pr('review-rejected'))).toEqual([
+      'checks:done',
+      'review:person',
+      'merge:pending',
+    ]);
     expect(prStates(pr('merged', { mergedAt: '2026-11-22T01:00:00Z' }))).toEqual([
       'checks:done',
       'review:done',
