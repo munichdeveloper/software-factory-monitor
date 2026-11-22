@@ -1,4 +1,4 @@
-import type { QueueEntry, QueueRun } from './queue';
+import type { QueueEntry, QueuePullRequest, QueueRun } from './queue';
 import { reasonLabels, stageLabels } from './labels';
 
 /**
@@ -279,5 +279,24 @@ export function pipeline(entry: QueueEntry): PipelineStep[] {
     latest.validation === 'passed' ? null : 'nicht konfiguriert',
   );
   mergeSteps(entry, set);
+  return [...steps.values()];
+}
+
+/** An adopted pull request (no task, no coding): only the steps of the merge pass. */
+export function pullRequestPipeline(pr: QueuePullRequest): PipelineStep[] {
+  const keys: PipelineStepKey[] = ['checks', 'review', 'merge'];
+  const steps = new Map<PipelineStepKey, PipelineStep>(
+    keys.map((key) => [key, { key, label: stepLabels[key], state: 'pending', note: null }]),
+  );
+  const set = (key: PipelineStepKey, state: StepState, note: string | null = null) => {
+    steps.set(key, { key, label: stepLabels[key], state, note });
+  };
+  if (pr.state === 'closed' && !pr.mergedAt && pr.merge.step !== 'merged') {
+    set('checks', 'skipped');
+    set('review', 'skipped');
+    set('merge', 'skipped', 'ohne Merge geschlossen');
+    return [...steps.values()];
+  }
+  mergeSteps({ merge: pr.merge, mergedAt: pr.mergedAt, stage: 'awaiting-pr' } as QueueEntry, set);
   return [...steps.values()];
 }

@@ -6,9 +6,11 @@ import {
   groupOf,
   groups,
   nextReconcile,
+  pullRequestGroup,
   summary,
   type Group,
   type QueueEntry,
+  type QueuePullRequest,
   type QueueRepository,
   type QueueView,
 } from '@/lib/queue';
@@ -22,7 +24,14 @@ import {
   type RuntimeEvent,
 } from '@/lib/events';
 import { clock, relative } from '@/lib/time';
-import { pipeline, runKindLabels, stepStateLabels, type StepState } from '@/lib/pipeline';
+import {
+  pipeline,
+  pullRequestPipeline,
+  runKindLabels,
+  stepStateLabels,
+  type PipelineStep,
+  type StepState,
+} from '@/lib/pipeline';
 
 const refreshSeconds = 30;
 const priorityLabels = { high: 'Hoch', normal: 'Normal', low: 'Niedrig' } as const;
@@ -66,28 +75,34 @@ const runOutcome = (run: QueueEntry['runs'][number]) =>
               } as Record<string, string>
             )[run.outcome ?? ''] ?? 'unbekannt');
 
+function Steps({ steps }: { steps: PipelineStep[] }) {
+  return (
+    <ol className="pipeline" aria-label="Pipeline">
+      {steps.map((step) => (
+        <li
+          key={step.key}
+          className={`step ${step.state}`}
+          title={`${step.label}: ${stepStateLabels[step.state]}${step.note ? ` – ${step.note}` : ''}`}
+        >
+          <span className="dot" aria-hidden="true">
+            {stepIcons[step.state]}
+          </span>
+          <span className="step-text">
+            <span className="step-label">{step.label}</span>
+            <span className="step-note">{step.note ?? stepStateLabels[step.state]}</span>
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 /** The task's way through the Factory: finished steps ticked, the current one highlighted, the rest still open. */
 function Pipeline({ entry }: { entry: QueueEntry }) {
   const steps = pipeline(entry);
   return (
     <div className="pipeline-wrap">
-      <ol className="pipeline" aria-label="Pipeline">
-        {steps.map((step) => (
-          <li
-            key={step.key}
-            className={`step ${step.state}`}
-            title={`${step.label}: ${stepStateLabels[step.state]}${step.note ? ` – ${step.note}` : ''}`}
-          >
-            <span className="dot" aria-hidden="true">
-              {stepIcons[step.state]}
-            </span>
-            <span className="step-text">
-              <span className="step-label">{step.label}</span>
-              <span className="step-note">{step.note ?? stepStateLabels[step.state]}</span>
-            </span>
-          </li>
-        ))}
-      </ol>
+      <Steps steps={steps} />
       {entry.runs.length > 1 && (
         <ol className="runs" aria-label="Versuche">
           {entry.runs.map((run, i) => (
@@ -112,6 +127,39 @@ function Slots({ slots }: { slots: QueueRepository['slots'] }) {
         {slots.active}/{slots.max} Slots
       </span>
     </span>
+  );
+}
+
+const pullRequestGroupText: Record<Group, string> = {
+  active: 'In Prüfung',
+  waiting: 'Wartet',
+  person: 'Wartet auf dich',
+  stuck: 'Hängt',
+  done: 'Erledigt',
+};
+
+/** A pull request the Factory merges without a task of its own (sf:automerge): only checks, review and merge. */
+function PullRequestEntry({ pr, now }: { pr: QueuePullRequest; now: number }) {
+  const group = pullRequestGroup(pr);
+  return (
+    <li className={`entry ${group}`}>
+      <span className="position" />
+      <div className="issue">
+        <a href={pr.url} target="_blank" rel="noreferrer">
+          <span className="number">PR #{pr.number}</span> {pr.title ?? ''}
+        </a>
+        <div className="details">
+          <span>Übernommen über sf:automerge, ohne eigene Aufgabe</span>
+        </div>
+        <div className="pipeline-wrap">
+          <Steps steps={pullRequestPipeline(pr)} />
+        </div>
+      </div>
+      <span className={`badge ${group}`}>{pullRequestGroupText[group]}</span>
+      <span className="meta">
+        <span title={clock(pr.merge.at)}>{relative(pr.merge.at, now)}</span>
+      </span>
+    </li>
   );
 }
 
@@ -223,6 +271,9 @@ function Repository({
   const entries = repository.entries.filter((e) =>
     filter ? groupOf(e.stage) === filter : groupOf(e.stage) !== 'done',
   );
+  const pullRequests = repository.pullRequests.filter((pr) =>
+    filter ? pullRequestGroup(pr) === filter : pullRequestGroup(pr) !== 'done',
+  );
   // Positions count only what still waits to be started, in the broker's order.
   let waiting = 0;
   const next = nextReconcile(view, repository, now);
@@ -275,7 +326,16 @@ function Repository({
           ))}
         </ol>
       ) : (
-        <p className="empty">{filter ? 'Nichts in dieser Gruppe.' : 'Keine offenen Aufgaben.'}</p>
+        !pullRequests.length && (
+          <p className="empty">{filter ? 'Nichts in dieser Gruppe.' : 'Keine offenen Aufgaben.'}</p>
+        )
+      )}
+      {pullRequests.length > 0 && (
+        <ol className="entries" aria-label="Übernommene Pull Requests">
+          {pullRequests.map((pr) => (
+            <PullRequestEntry key={pr.number} pr={pr} now={now} />
+          ))}
+        </ol>
       )}
     </section>
   );

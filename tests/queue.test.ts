@@ -45,14 +45,15 @@ describe('broker client', () => {
 });
 
 describe('summary', () => {
-  it('counts entries per group and ignores unknown stages', () => {
+  it('counts entries and adopted pull requests per group and ignores unknown stages', () => {
     const view = demoQueue();
     view.repositories[0]!.entries.push({
       ...view.repositories[0]!.entries[0]!,
       issueNumber: 999,
       stage: 'something-new',
     });
-    expect(summary(view)).toEqual({ active: 1, waiting: 2, person: 4, stuck: 2, done: 1 });
+    // The adopted pull request of controla (in review) counts as active.
+    expect(summary(view)).toEqual({ active: 2, waiting: 2, person: 4, stuck: 2, done: 1 });
     expect(groupOf('something-new')).toBeNull();
   });
 });

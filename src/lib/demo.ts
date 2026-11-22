@@ -50,6 +50,7 @@ export function demoQueue(now = new Date()): QueueView {
       {
         repositoryId: 1,
         repository: 'munichdeveloper/backofficer',
+        pullRequests: [],
         observedAt: ago(2),
         outcome: 'success',
         failure: null,
@@ -138,6 +139,16 @@ export function demoQueue(now = new Date()): QueueView {
       {
         repositoryId: 2,
         repository: 'munichdeveloper/controla',
+        pullRequests: [
+          {
+            number: 160,
+            url: pr('munichdeveloper/controla', 160),
+            title: 'Ersatz-PR: Exportfilter nachgebessert',
+            state: 'open',
+            mergedAt: null,
+            merge: merge(160, { step: 'review', risk: 'medium', at: ago(1) }),
+          },
+        ],
         observedAt: ago(5),
         outcome: 'success',
         failure: { reason: 'GITHUB_HTTP_403', at: ago(1) },
@@ -235,6 +246,7 @@ export function demoQueue(now = new Date()): QueueView {
       {
         repositoryId: 3,
         repository: 'munichdeveloper/geschaeftsideen-web',
+        pullRequests: [],
         observedAt: null,
         outcome: null,
         failure: null,
