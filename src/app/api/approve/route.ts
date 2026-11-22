@@ -1,12 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { cookies } from 'next/headers';
-import {
-  approvalCookie,
-  approvalMinutes,
-  approvalScope,
-  isCurrent,
-  parseTarget,
-} from '@/lib/approval';
+import { approvalCookie, approvalMinutes, isCurrent, parseTarget } from '@/lib/approval';
 import { signPending } from '@/lib/approval-server';
 import { cookieOptions, currentUser } from '@/lib/auth';
 import { demoMode, env, sessionSecret } from '@/lib/env';
@@ -58,9 +52,8 @@ export async function POST(request: Request) {
   const url = new URL('https://github.com/login/oauth/authorize');
   url.search = new URLSearchParams({
     client_id: env().GITHUB_OAUTH_CLIENT_ID,
-    // A subdirectory of the OAuth App's registered callback, so the App needs no change.
-    redirect_uri: `${env().APP_URL}/api/auth/callback/approve`,
-    scope: approvalScope,
+    // The monitor's GitHub App accepts only its registered callback; the callback tells login and approval apart.
+    redirect_uri: `${env().APP_URL}/api/auth/callback`,
     state,
     login: user.login,
     allow_signup: 'false',

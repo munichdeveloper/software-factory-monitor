@@ -1,5 +1,8 @@
 import { timingSafeEqual } from 'node:crypto';
 import { cookies } from 'next/headers';
+import { approvalCookie } from '@/lib/approval';
+import { finishApproval } from '@/lib/approval-callback';
+import { verifyPending } from '@/lib/approval-server';
 import { cookieOptions } from '@/lib/auth';
 import { allowedUser, env, sessionSecret } from '@/lib/env';
 import { sessionCookie, sessionHours, sign, stateCookie } from '@/lib/session';
@@ -14,8 +17,11 @@ const same = (a: string, b: string) =>
 export async function GET(request: Request) {
   const url = new URL(request.url),
     jar = await cookies();
-  const state = url.searchParams.get('state') ?? '',
-    code = url.searchParams.get('code') ?? '',
+  const state = url.searchParams.get('state') ?? '';
+  // The way back from an approval started on the queue page (see src/lib/approval-callback.ts).
+  const pending = verifyPending(jar.get(approvalCookie)?.value, sessionSecret());
+  if (pending && same(state, pending.state)) return finishApproval(request);
+  const code = url.searchParams.get('code') ?? '',
     expected = jar.get(stateCookie)?.value ?? '';
   jar.delete(stateCookie);
   if (!code || !expected || !same(state, expected)) return back('state');

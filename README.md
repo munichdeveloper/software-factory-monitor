@@ -23,7 +23,7 @@ else.
 
 ## Access
 
-Sign-in with GitHub (an OAuth App of its own, callback `https://MONITOR_HOST/api/auth/callback`). Only the GitHub
+Sign-in with GitHub (a GitHub App of its own, used for user sign-in only, callback `https://MONITOR_HOST/api/auth/callback`). Only the GitHub
 user IDs in `MONITOR_ALLOWED_GITHUB_IDS` get a session. Sessions are signed cookies (12 hours) with
 `MONITOR_SESSION_SECRET`; nothing is stored on the server and the GitHub token is discarded after the login.
 
@@ -35,11 +35,15 @@ request, as the signed-in person:
 
 1. The form post (same origin only) is checked against the broker's current queue: only an id the merge pass
    currently asks for, for that repository and pull request, is accepted.
-2. The monitor sends the person to GitHub once more, with scope `repo` (posting on private repositories needs it) and
-   callback `/api/auth/callback/approve`, a subdirectory of the OAuth App's callback, so the App needs no change.
-   After the first approval GitHub remembers the grant and returns without asking.
+2. The monitor sends the person to GitHub once more. The sign-in is a GitHub App (client id `Iv…`), which accepts
+   only its registered callback, so login and approval share `/api/auth/callback`; the approval's own signed cookie
+   tells them apart. GitHub returns without a prompt when the person already authorised the App.
 3. The callback accepts only the same GitHub account that is signed in to the monitor, checks the queue again and
-   posts the comment with that person's token. The token is used for this one comment and then discarded.
+   posts the comment with that person's user access token. The token is used for this one comment and then discarded.
+
+A GitHub App user token can comment only where the App may: the monitor's App needs the repository permission
+**Pull requests: Read and write** and must be installed on every repository the Factory works in (or on all
+repositories of the account). Without that GitHub refuses the comment and the page says so.
 
 The Factory itself still decides: it counts the comment only from someone with write access to the repository and only
 for the current head, review and risk (a new commit yields a new id).
