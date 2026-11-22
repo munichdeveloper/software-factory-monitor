@@ -6,7 +6,6 @@ import { currentUser } from '@/lib/auth';
 import { allowedUser, env, sessionSecret } from '@/lib/env';
 import { loadQueue } from '@/lib/load';
 
-export const dynamic = 'force-dynamic';
 const back = (result: string, approvalId?: string) => {
   const url = new URL('/', env().APP_URL);
   url.searchParams.set('freigabe', result);
@@ -17,10 +16,11 @@ const same = (a: string, b: string) =>
   a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
 /**
- * Finishes an approval: GitHub confirmed the same person who started it in the monitor, the broker still asks for
+ * Finishes an approval (called from /api/auth/callback when the approval cookie's state matches; the monitor's GitHub
+ * App accepts only its registered callback URL, so login and approval share it): GitHub confirmed the same person who started it in the monitor, the broker still asks for
  * this approval, and the comment `/harness approve <id>` is posted with that person's token. The token is not kept.
  */
-export async function GET(request: Request) {
+export async function finishApproval(request: Request): Promise<Response> {
   const url = new URL(request.url),
     jar = await cookies();
   const pending = verifyPending(jar.get(approvalCookie)?.value, sessionSecret());
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
         client_id: env().GITHUB_OAUTH_CLIENT_ID,
         client_secret: env().GITHUB_OAUTH_CLIENT_SECRET,
         code,
-        redirect_uri: `${env().APP_URL}/api/auth/callback/approve`,
+        redirect_uri: `${env().APP_URL}/api/auth/callback`,
       }),
       signal: AbortSignal.timeout(10000),
     });

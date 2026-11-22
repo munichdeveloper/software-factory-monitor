@@ -5,16 +5,15 @@ import type { QueueEntry, QueueView } from './queue';
  *
  * The Factory merges a pull request above its risk threshold only after a comment `/harness approve <id>` on that pull
  * request by someone with write access to the repository (software-factory src/merge/manager.ts). The monitor posts
- * exactly that comment, as the signed-in person: their own GitHub token, asked for with a separate OAuth step at the
- * moment of approval, used for this one comment and then discarded. The comment's author is the approving person, so
+ * exactly that comment, as the signed-in person: a user access token of the monitor's GitHub App, asked for with a
+ * second authorisation at the moment of approval, used for this one comment and then discarded. GitHub only lets that
+ * token comment where the App is installed with "Pull requests: write". The comment's author is the approving person, so
  * the Factory's own check of who approved stays the only authority; the monitor never posts with an App or service
  * credential and only ever posts an id the broker currently asks for.
  */
 export const approvalCookie = 'sfmon-approval';
 /** The OAuth step at approval time must finish within this time. */
 export const approvalMinutes = 5;
-/** Posting a comment as the person: `public_repo` would not reach private repositories. */
-export const approvalScope = 'repo';
 
 const commandPattern = /\/harness approve ([a-f0-9]{64})/;
 const idPattern = /^[a-f0-9]{64}$/;
@@ -83,7 +82,7 @@ export const approvalResultLabels: Record<string, string> = {
   APPROVAL_GITHUB_UNREACHABLE: 'GitHub ist nicht erreichbar. Es wurde nichts gepostet.',
   APPROVAL_TOKEN_REJECTED: 'GitHub hat die Anmeldung abgelehnt. Bitte erneut versuchen.',
   APPROVAL_FORBIDDEN:
-    'GitHub erlaubt dir keinen Kommentar an diesem PR (fehlender Zugriff auf das Repository).',
+    'GitHub hat den Kommentar abgelehnt: Die GitHub-App des Monitors braucht die Berechtigung „Pull requests: Read and write“ und muss in diesem Repository installiert sein.',
   APPROVAL_GITHUB_FAILED: 'GitHub hat den Kommentar nicht angenommen. Bitte erneut versuchen.',
   APPROVAL_QUEUE_UNAVAILABLE:
     'Die Factory-Laufzeit ist nicht erreichbar; ohne ihren aktuellen Stand wird nichts gepostet.',
