@@ -60,6 +60,15 @@ const entrySchema = z.object({
   merge: mergeSchema.nullable().default(null),
   mergedAt: z.string().nullable().default(null),
 });
+/** A pull request the merge pass worked on that belongs to no task (adopted with sf:automerge; broker 0.26+). */
+const pullRequestSchema = z.object({
+  number: z.number().int().positive(),
+  url: z.url(),
+  title: z.string().nullable(),
+  state: z.enum(['open', 'closed']).nullable(),
+  mergedAt: z.string().nullable(),
+  merge: mergeSchema,
+});
 const repositorySchema = z.object({
   repositoryId: z.number().int(),
   repository: z.string(),
@@ -68,6 +77,7 @@ const repositorySchema = z.object({
   failure: z.object({ reason: z.string(), at: z.string() }).nullable(),
   slots: z.object({ active: z.number().int(), max: z.number().int() }).nullable(),
   entries: z.array(entrySchema),
+  pullRequests: z.array(pullRequestSchema).default([]),
 });
 export const queueViewSchema = z.object({
   generatedAt: z.string(),
@@ -83,6 +93,7 @@ export type QueueEntry = z.infer<typeof entrySchema>;
 export type QueueRun = z.infer<typeof runSchema>;
 export type MergeProgress = z.infer<typeof mergeSchema>;
 export type QueueRepository = z.infer<typeof repositorySchema>;
+export type QueuePullRequest = z.infer<typeof pullRequestSchema>;
 export type QueueView = z.infer<typeof queueViewSchema>;
 
 /** Groups for the summary: what a person looks at first. */
@@ -100,13 +111,34 @@ export function groupOf(stage: string): Group | null {
     if (members.includes(stage)) return group;
   return null;
 }
+/** The group of an adopted pull request, from the step the merge pass last left it at. */
+export function pullRequestGroup(pr: QueuePullRequest): Group {
+  if (pr.mergedAt || pr.merge.step === 'merged' || pr.state === 'closed') return 'done';
+  switch (pr.merge.step) {
+    case 'checks':
+    case 'branch-update':
+    case 'review':
+    case 'merging':
+      return 'active';
+    case 'gate':
+      return 'waiting';
+    case 'handover':
+    case 'approval-required':
+    case 'stopped':
+      return 'person';
+    default:
+      return 'stuck';
+  }
+}
 export function summary(view: QueueView): Record<Group, number> {
   const counts: Record<Group, number> = { active: 0, waiting: 0, person: 0, stuck: 0, done: 0 };
-  for (const repository of view.repositories)
+  for (const repository of view.repositories) {
     for (const entry of repository.entries) {
       const group = groupOf(entry.stage);
       if (group) counts[group]++;
     }
+    for (const pr of repository.pullRequests) counts[pullRequestGroup(pr)]++;
+  }
   return counts;
 }
 

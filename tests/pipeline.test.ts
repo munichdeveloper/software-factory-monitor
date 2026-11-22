@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { demoQueue } from '../src/lib/demo';
-import { pipeline } from '../src/lib/pipeline';
-import { queueViewSchema, type QueueEntry } from '../src/lib/queue';
+import { pipeline, pullRequestPipeline } from '../src/lib/pipeline';
+import {
+  pullRequestGroup,
+  queueViewSchema,
+  type QueueEntry,
+  type QueuePullRequest,
+} from '../src/lib/queue';
 
 const entries = demoQueue(new Date('2026-11-19T12:00:00Z')).repositories.flatMap((r) => r.entries);
 const of = (issue: number) => entries.find((e) => e.issueNumber === issue)!;
@@ -98,5 +103,52 @@ describe('pipeline', () => {
       'review:pending',
       'merge:person',
     ]);
+  });
+});
+
+describe('adopted pull requests (sf:automerge)', () => {
+  const pr = (step: string, extra: Partial<QueuePullRequest> = {}): QueuePullRequest => ({
+    number: 43,
+    url: 'https://github.com/owner/repo/pull/43',
+    title: 'Beispiel',
+    state: 'open',
+    mergedAt: null,
+    merge: { pullRequest: 43, step, detail: null, risk: 'high', at: '2026-11-22T00:50:00Z' },
+    ...extra,
+  });
+  const prStates = (value: QueuePullRequest) =>
+    pullRequestPipeline(value).map((s) => `${s.key}:${s.state}`);
+  it('shows only checks, review and merge, and groups them for the summary', () => {
+    expect(prStates(pr('review'))).toEqual(['checks:done', 'review:current', 'merge:pending']);
+    expect(pullRequestPipeline(pr('review'))[1]!.note).toBe('Risiko hoch');
+    expect(pullRequestGroup(pr('review'))).toBe('active');
+    expect(prStates(pr('handover'))).toEqual(['checks:done', 'review:person', 'merge:pending']);
+    expect(pullRequestGroup(pr('handover'))).toBe('person');
+    expect(pullRequestGroup(pr('checks-failed'))).toBe('stuck');
+    expect(prStates(pr('merged', { mergedAt: '2026-11-22T01:00:00Z' }))).toEqual([
+      'checks:done',
+      'review:done',
+      'merge:done',
+    ]);
+    expect(pullRequestGroup(pr('handover', { state: 'closed' }))).toBe('done');
+    expect(prStates(pr('handover', { state: 'closed' }))[2]).toBe('merge:skipped');
+  });
+  it('parses a broker without the field as no pull requests', () => {
+    const view = queueViewSchema.parse({
+      generatedAt: '2026-11-22T00:00:00Z',
+      reconcileIntervalSeconds: null,
+      repositories: [
+        {
+          repositoryId: 1,
+          repository: 'o/r',
+          observedAt: null,
+          outcome: null,
+          failure: null,
+          slots: null,
+          entries: [],
+        },
+      ],
+    });
+    expect(view.repositories[0]!.pullRequests).toEqual([]);
   });
 });
