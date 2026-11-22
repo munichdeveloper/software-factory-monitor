@@ -24,6 +24,20 @@ describe('metrics client', () => {
     );
     expect((init as RequestInit).headers).toEqual({ Authorization: `Bearer ${token}` });
   });
+  it('accepts a broker without the router evaluation', async () => {
+    const { router, ...older } = demoMetrics(new Date('2026-11-21T12:00:00Z'));
+    expect(router?.cases.length).toBeGreaterThan(0);
+    expect(
+      (
+        await fetchMetrics(
+          'http://runtime-broker:8095',
+          token,
+          { days: 30, repository: null },
+          reply(200, older),
+        )
+      ).router,
+    ).toBeUndefined();
+  });
   it('maps failures to fixed codes', async () => {
     const q = { days: 30, repository: null };
     await expect(fetchMetrics('http://example.com', token, q, reply(200, {}))).rejects.toThrow(

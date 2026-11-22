@@ -28,6 +28,81 @@ const itemSchema = z.object({
   costUsd: z.number(),
 });
 const ratio = z.number().nullable();
+const tier = z.enum(['cheap', 'mid', 'strong']);
+const routerGroupSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  routed: z.boolean(),
+  tier,
+  model: z.string().nullable(),
+  effort: z.string().nullable(),
+  issues: z.number().int(),
+  settled: z.number().int(),
+  merged: z.number().int(),
+  firstPassYield: ratio,
+  firstRunFailRate: ratio,
+  reworkRate: ratio,
+  escalationRate: ratio,
+  reviews: z.number().int(),
+  rejections: z.number().int(),
+  rejectionRate: ratio,
+  meanProbability: ratio,
+  meanCostUsd: z.number().nullable(),
+  costPerMergedUsd: z.number().nullable(),
+  leadMedianMs: ms,
+  firstRunMedianMs: ms,
+  overkill: z.number().int(),
+  underpowered: z.number().int(),
+});
+const routerCaseSchema = z.object({
+  repository: z.string(),
+  issueNumber: z.number().int(),
+  title: z.string().nullable(),
+  url: z.url(),
+  choice: z.string().nullable(),
+  routed: z.boolean(),
+  probability: ratio,
+  model: z.string(),
+  effort: z.string().nullable(),
+  tier,
+  status: z.enum(['merged', 'closed', 'open']),
+  firstRunOk: z.boolean(),
+  codingRuns: z.number().int(),
+  reworks: z.number().int(),
+  retries: z.number().int(),
+  escalations: z.number().int(),
+  reviews: z.number().int(),
+  rejections: z.number().int(),
+  firstPass: z.boolean(),
+  firstRunMs: ms,
+  firstRunCostUsd: z.number().nullable(),
+  costUsd: z.number(),
+  leadMs: ms,
+  startedAt: z.string(),
+  flag: z.enum(['overkill', 'underpowered']).nullable(),
+});
+/** Jev's model choice against the outcome (broker router evaluation); absent from older brokers. */
+const routerEvaluationSchema = z.object({
+  issues: z.number().int(),
+  routed: z.number().int(),
+  routedShare: ratio,
+  overkillThresholdMs: z.number(),
+  overkill: z.number().int(),
+  overkillCostUsd: z.number(),
+  underpowered: z.number().int(),
+  verdictsSince: z.string().nullable(),
+  choices: z.array(routerGroupSchema),
+  tiers: z.array(routerGroupSchema),
+  confidence: z.array(
+    z.object({
+      bucket: z.string(),
+      issues: z.number().int(),
+      firstPassYield: ratio,
+      troubleRate: ratio,
+    }),
+  ),
+  cases: z.array(routerCaseSchema),
+});
 export const metricsViewSchema = z.object({
   generatedAt: z.string(),
   from: z.string(),
@@ -73,7 +148,11 @@ export const metricsViewSchema = z.object({
     }),
   ),
   items: z.array(itemSchema),
+  router: routerEvaluationSchema.optional(),
 });
+export type RouterEvaluation = z.infer<typeof routerEvaluationSchema>;
+export type RouterGroup = z.infer<typeof routerGroupSchema>;
+export type RouterCase = z.infer<typeof routerCaseSchema>;
 export type MetricsView = z.infer<typeof metricsViewSchema>;
 export type MetricsItem = z.infer<typeof itemSchema>;
 export type Distribution = z.infer<typeof distributionSchema>;

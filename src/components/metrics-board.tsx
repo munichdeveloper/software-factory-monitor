@@ -2,7 +2,14 @@ import Link from 'next/link';
 import { periods, usd } from '@/lib/analytics';
 import { errorLabels } from '@/lib/labels';
 import type { LoadedMetrics } from '@/lib/load';
-import { duration, share, type Distribution, type MetricsView } from '@/lib/metrics';
+import {
+  duration,
+  share,
+  type Distribution,
+  type MetricsView,
+  type RouterEvaluation,
+  type RouterGroup,
+} from '@/lib/metrics';
 import { clock } from '@/lib/time';
 
 type Query = { days: number; repository: string | null };
@@ -243,6 +250,243 @@ function Items({ view }: { view: MetricsView }) {
   );
 }
 
+function tierName(tier: RouterGroup['tier']) {
+  return tier === 'cheap' ? 'günstig' : tier === 'mid' ? 'mittel' : 'stark';
+}
+const rate = (value: number | null, of: number) => (of ? share(value) : '–');
+
+function RouterGroups({ title, rows, note }: { title: string; rows: RouterGroup[]; note: string }) {
+  return (
+    <section className="panel">
+      <header>
+        <h2>{title}</h2>
+        <span className="muted">{note}</span>
+      </header>
+      <div className="scroll">
+        <table className="router-groups">
+          <thead>
+            <tr>
+              <th>Wahl</th>
+              <th className="num">Issues</th>
+              <th className="num">Gemergt</th>
+              <th
+                className="num"
+                title="Gemergt nach einem erfolgreichen Lauf ohne ablehnendes Review, Anteil an abgeschlossenen Issues"
+              >
+                Erster Versuch
+              </th>
+              <th className="num" title="Erster Coding-Lauf ohne Erfolg">
+                Lauf gescheitert
+              </th>
+              <th
+                className="num"
+                title="Weiterer Lauf nach einem erfolgreichen Lauf (Review oder Validierung hat abgelehnt)"
+              >
+                Nacharbeit
+              </th>
+              <th className="num" title="Eskalation auf das stärkere Modell (retryAgents)">
+                Eskalation
+              </th>
+              <th className="num" title="Ablehnende Merge-Reviews je Review">
+                Review lehnt ab
+              </th>
+              <th className="num" title="Jevs Wahrscheinlichkeit für seine Wahl">
+                Jev sicher (Ø)
+              </th>
+              <th className="num">Kosten je Issue</th>
+              <th className="num">Durchlaufzeit (Median)</th>
+              <th className="num" title="stark vermutlich unnötig / vermutlich zu schwach">
+                Hinweise
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.key}>
+                <td>
+                  {r.label}
+                  {r.model && (
+                    <span className="muted">
+                      {' '}
+                      {tierName(r.tier)}
+                      {r.routed ? '' : ' · ohne Jev'}
+                    </span>
+                  )}
+                </td>
+                <td className="num">{r.issues}</td>
+                <td className="num">{r.merged}</td>
+                <td className="num">{rate(r.firstPassYield, r.settled)}</td>
+                <td className="num">{share(r.firstRunFailRate)}</td>
+                <td className="num">{share(r.reworkRate)}</td>
+                <td className="num">{share(r.escalationRate)}</td>
+                <td className="num">
+                  {r.reviews ? `${share(r.rejectionRate)} (${r.rejections}/${r.reviews})` : '–'}
+                </td>
+                <td className="num">{share(r.meanProbability)}</td>
+                <td className="num">{usd(r.meanCostUsd)}</td>
+                <td className="num">{duration(r.leadMedianMs)}</td>
+                <td className="num">
+                  {r.overkill || r.underpowered ? `${r.overkill} / ${r.underpowered}` : ''}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function RouterCases({ router }: { router: RouterEvaluation }) {
+  const flagged = router.cases.filter((c) => c.flag);
+  return (
+    <section className="panel">
+      <header>
+        <h2>Auffällige Fälle</h2>
+        <span className="muted">
+          Hinweise, keine Beweise: ein gescheiterter Lauf kann auch an der Infrastruktur liegen
+        </span>
+      </header>
+      {flagged.length ? (
+        <div className="scroll">
+          <table className="metric-items">
+            <thead>
+              <tr>
+                <th>Issue</th>
+                <th>Hinweis</th>
+                <th>Jevs Wahl</th>
+                <th className="num">Erster Lauf</th>
+                <th className="num">Läufe</th>
+                <th className="num">Review</th>
+                <th>Stand</th>
+                <th className="num">Kosten</th>
+              </tr>
+            </thead>
+            <tbody>
+              {flagged.map((c) => (
+                <tr key={`${c.repository}#${c.issueNumber}`}>
+                  <td>
+                    <a href={c.url} target="_blank" rel="noreferrer">
+                      <span className="number">#{c.issueNumber}</span> {c.title ?? 'Issue'}
+                    </a>
+                    <span className="muted"> {c.repository.split('/')[1]}</span>
+                  </td>
+                  <td>
+                    <span className={`chip ${c.flag === 'overkill' ? 'router' : 'escalation'}`}>
+                      {c.flag === 'overkill' ? 'stark vermutlich unnötig' : 'vermutlich zu schwach'}
+                    </span>
+                  </td>
+                  <td>
+                    {c.routed ? (c.choice ?? 'unbekannt') : 'konfiguriert'}
+                    <span className="muted">
+                      {' '}
+                      {c.model}
+                      {c.effort ? ` ${c.effort}` : ''}
+                      {c.probability !== null ? ` · ${share(c.probability)}` : ''}
+                    </span>
+                  </td>
+                  <td className="num">{c.firstRunOk ? duration(c.firstRunMs) : 'ohne Erfolg'}</td>
+                  <td className="num">
+                    {c.codingRuns}
+                    {c.reworks || c.retries || c.escalations ? (
+                      <span className="muted">
+                        {' '}
+                        (
+                        {[
+                          c.reworks ? `${c.reworks} Nacharbeit` : '',
+                          c.retries ? `${c.retries} Wiederholung` : '',
+                          c.escalations ? `${c.escalations} Eskalation` : '',
+                        ]
+                          .filter(Boolean)
+                          .join(', ')}
+                        )
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className="num">
+                    {c.reviews ? `${c.rejections} von ${c.reviews} abgelehnt` : '–'}
+                  </td>
+                  <td>
+                    {c.status === 'merged'
+                      ? 'gemergt'
+                      : c.status === 'closed'
+                        ? 'ohne Merge geschlossen'
+                        : 'offen'}
+                  </td>
+                  <td className="num">{usd(c.costUsd)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="empty">Keine auffälligen Fälle in diesem Zeitraum.</p>
+      )}
+    </section>
+  );
+}
+
+function Router({ router }: { router: RouterEvaluation }) {
+  return (
+    <>
+      <h2 className="section-title">Modellwahl durch Jev</h2>
+      <section className="kpis" aria-label="Modellwahl">
+        <div className="kpi">
+          <span className="value">{share(router.routedShare)}</span>
+          <span className="label">Erste Läufe nach Jevs Wahl</span>
+          <span className="muted">
+            {router.routed} von {router.issues} Issues · Rest: konfiguriertes Modell
+          </span>
+        </div>
+        {router.confidence
+          .filter((b) => b.bucket === 'ab 80 %' || b.bucket === 'unter 40 %')
+          .map((b) => (
+            <div className="kpi" key={b.bucket}>
+              <span className="value">{rate(b.firstPassYield, b.issues)}</span>
+              <span className="label">Erster Versuch, wenn Jev {b.bucket} sicher war</span>
+              <span className="muted">
+                {b.issues} Issues · {rate(b.troubleRate, b.issues)} mit Nacharbeit oder Fehlschlag
+              </span>
+            </div>
+          ))}
+        <div className="kpi lost">
+          <span className="value">
+            {router.overkill} / {router.underpowered}
+          </span>
+          <span className="label">Stark vermutlich unnötig / vermutlich zu schwach</span>
+          <span className="muted">
+            {usd(router.overkillCostUsd)} in den „stark“-Fällen · schnell heißt bis{' '}
+            {duration(router.overkillThresholdMs)}
+          </span>
+        </div>
+      </section>
+      <RouterGroups
+        title="Je Modellstufe"
+        rows={router.tiers}
+        note="Stufe des Modells im ersten Coding-Lauf"
+      />
+      <RouterGroups
+        title="Je Wahl"
+        rows={router.choices}
+        note="Kandidat, den Jev für den ersten Lauf gewählt hat, oder das konfigurierte Modell"
+      />
+      <RouterCases router={router} />
+      <p className="muted footnote">
+        Jeder Fall ist ein Issue, dessen erster Coding-Lauf im Zeitraum begann. Nacharbeit: ein
+        weiterer Lauf nach einem erfolgreichen (Review oder Validierung hat abgelehnt);
+        Wiederholung: ein weiterer Lauf nach einem gescheiterten; Eskalation: Versuch auf dem
+        stärkeren Modell. „Stark vermutlich unnötig“: Opus oder Fable, im ersten Versuch gemergt und
+        nicht langsamer als der Median der günstigeren Modelle. „Vermutlich zu schwach“: ein
+        günstigeres Modell, dessen erster Lauf scheiterte oder Nacharbeit, Eskalation oder ein
+        ablehnendes Review brauchte.{' '}
+        {router.verdictsSince
+          ? `Review-Urteile werden seit ${clock(router.verdictsSince)} gezählt.`
+          : 'Review-Urteile werden erst ab jetzt aufgezeichnet; bis dahin zeigt sich eine Ablehnung als Nacharbeit.'}
+      </p>
+    </>
+  );
+}
+
 export function MetricsBoard({
   loaded,
   query,
@@ -320,6 +564,7 @@ export function MetricsBoard({
               <Repositories view={view} />
             </div>
           )}
+          {view.router && <Router router={view.router} />}
           <Items view={view} />
           <p className="muted footnote">
             Durchlaufzeit: von der Aufnahme in die Factory (harness:managed gesetzt und, wo

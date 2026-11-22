@@ -834,3 +834,8 @@ button.primary {
 .approve-sent {
   color: var(--muted);
 }
+
+.section-title {
+  font-size: 1.15rem;
+  margin: 1.5rem 0 0.5rem;
+}
