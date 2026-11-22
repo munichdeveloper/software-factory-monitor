@@ -1,5 +1,6 @@
 import type { QueueEntry, QueuePullRequest, QueueRun } from './queue';
 import { reasonLabels, stageLabels } from './labels';
+import { withoutCommand } from './approval';
 
 /**
  * A task's way through the Factory as a pipeline: start, coding, independent validation, the pull request's checks,
@@ -131,7 +132,7 @@ function mergeSteps(
     case 'approval-required':
       set('checks', 'done');
       set('review', 'done', risk);
-      set('merge', 'person', merge.detail);
+      set('merge', 'person', withoutCommand(merge.detail) ?? 'Freigabe nötig');
       return;
     case 'gate':
       set('checks', 'done');

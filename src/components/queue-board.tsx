@@ -32,6 +32,9 @@ import {
   type PipelineStep,
   type StepState,
 } from '@/lib/pipeline';
+import { approvalResultLabels, pendingApproval } from '@/lib/approval';
+
+export type ApprovalResult = { result: string; id: string | null } | null;
 
 const refreshSeconds = 30;
 const priorityLabels = { high: 'Hoch', normal: 'Normal', low: 'Niedrig' } as const;
@@ -116,6 +119,56 @@ function Pipeline({ entry }: { entry: QueueEntry }) {
   );
 }
 
+/**
+ * Approves a pull request the Factory handed over above its risk threshold: posts `/harness approve <id>` at the PR as
+ * the signed-in person (after a GitHub confirmation). Two clicks, so a stray click posts nothing.
+ */
+function Approve({
+  repository,
+  entry,
+  sent,
+}: {
+  repository: string;
+  entry: QueueEntry;
+  sent: string | null;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const pending = pendingApproval(entry);
+  if (!pending) return null;
+  if (sent === pending.approvalId)
+    return (
+      <p className="approve">
+        <span className="approve-sent">✓ Freigabe für PR #{pending.pullRequest} gepostet</span>
+      </p>
+    );
+  return (
+    <form className="approve" action="/api/approve" method="post">
+      <input type="hidden" name="repository" value={repository} />
+      <input type="hidden" name="pullRequest" value={pending.pullRequest} />
+      <input type="hidden" name="approvalId" value={pending.approvalId} />
+      {confirming ? (
+        <>
+          <span>
+            PR #{pending.pullRequest} freigeben
+            {entry.merge?.risk ? ` (Risiko ${entry.merge.risk})` : ''}? Der Kommentar wird in deinem
+            Namen gepostet.
+          </span>
+          <button type="submit" className="primary">
+            Ja, freigeben
+          </button>
+          <button type="button" className="ghost" onClick={() => setConfirming(false)}>
+            Abbrechen
+          </button>
+        </>
+      ) : (
+        <button type="button" className="primary" onClick={() => setConfirming(true)}>
+          Freigeben
+        </button>
+      )}
+    </form>
+  );
+}
+
 function Slots({ slots }: { slots: QueueRepository['slots'] }) {
   if (!slots) return <span className="muted">Slots unbekannt</span>;
   return (
@@ -169,12 +222,14 @@ function Entry({
   position,
   now,
   event,
+  approved,
 }: {
   entry: QueueEntry;
   repository: string;
   position: number | null;
   now: number;
   event: RuntimeEvent | undefined;
+  approved: string | null;
 }) {
   const group = groupOf(entry.stage);
   const details: ReactNode[] = [];
@@ -233,6 +288,7 @@ function Entry({
           </div>
         )}
         <Pipeline entry={entry} />
+        <Approve repository={repository} entry={entry} sent={approved} />
       </div>
       <span className={`badge ${group ?? ''}`}>{stageText(entry)}</span>
       <span className="meta">
@@ -254,12 +310,14 @@ function Repository({
   view,
   now,
   events,
+  approved,
 }: {
   repository: QueueRepository;
   filter: Group | null;
   view: QueueView;
   now: number;
   events: RuntimeEvent[];
+  approved: string | null;
 }) {
   const latest = latestByIssue(events, repository.repository);
   const live: LiveView = {
@@ -322,6 +380,7 @@ function Repository({
               position={groupOf(entry.stage) === 'waiting' ? ++waiting : null}
               now={now}
               event={issueEvent(latest, entry.issueNumber, live)}
+              approved={approved}
             />
           ))}
         </ol>
@@ -341,7 +400,15 @@ function Repository({
   );
 }
 
-export function QueueBoard({ initial, login }: { initial: Loaded; login: string }) {
+export function QueueBoard({
+  initial,
+  login,
+  approval = null,
+}: {
+  initial: Loaded;
+  login: string;
+  approval?: ApprovalResult;
+}) {
   const [loaded, setLoaded] = useState(initial);
   const [view, setView] = useState(initial.view);
   const [now, setNow] = useState(() => Date.parse(initial.view?.generatedAt ?? '') || 0);
@@ -407,6 +474,11 @@ export function QueueBoard({ initial, login }: { initial: Loaded; login: string 
           </form>
         </div>
       </header>
+      {approval && (
+        <p className={approval.result === 'ok' || approval.result === 'demo' ? 'notice' : 'alert'}>
+          {approvalResultLabels[approval.result] ?? approvalResultLabels.APPROVAL_INVALID}
+        </p>
+      )}
       {loaded.error && <p className="alert">{errorLabels[loaded.error] ?? loaded.error}</p>}
       {counts && (
         <nav className="summary" aria-label="Filter">
@@ -448,6 +520,7 @@ export function QueueBoard({ initial, login }: { initial: Loaded; login: string 
           view={view!}
           now={now}
           events={view?.events ?? []}
+          approved={approval?.result === 'ok' ? approval.id : null}
         />
       ))}
     </main>

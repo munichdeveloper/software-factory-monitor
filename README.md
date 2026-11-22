@@ -27,6 +27,23 @@ Sign-in with GitHub (an OAuth App of its own, callback `https://MONITOR_HOST/api
 user IDs in `MONITOR_ALLOWED_GITHUB_IDS` get a session. Sessions are signed cookies (12 hours) with
 `MONITOR_SESSION_SECRET`; nothing is stored on the server and the GitHub token is discarded after the login.
 
+## Approving pull requests
+
+When the Factory hands a pull request over because its risk class is above `merge.risk.autoMergeUpTo`, the merge
+step shows a button **Freigeben**. It posts the comment the Factory asks for, `/harness approve <id>`, on the pull
+request, as the signed-in person:
+
+1. The form post (same origin only) is checked against the broker's current queue: only an id the merge pass
+   currently asks for, for that repository and pull request, is accepted.
+2. The monitor sends the person to GitHub once more, with scope `repo` (posting on private repositories needs it) and
+   callback `/api/auth/callback/approve`, a subdirectory of the OAuth App's callback, so the App needs no change.
+   After the first approval GitHub remembers the grant and returns without asking.
+3. The callback accepts only the same GitHub account that is signed in to the monitor, checks the queue again and
+   posts the comment with that person's token. The token is used for this one comment and then discarded.
+
+The Factory itself still decides: it counts the comment only from someone with write access to the repository and only
+for the current head, review and risk (a new commit yields a new id).
+
 ## Configuration
 
 | Variable                                               | Content                                                                                             |
