@@ -81,6 +81,22 @@ describe('runtime events', () => {
     expect(repositoryRefusal([refused], 'o/r', stale)!.id).toBe(1);
     expect(repositoryRefusal([refused], 'o/r')!.id).toBe(1);
   });
+  it('drops attention_required once the live view shows the issue running', () => {
+    const blocked = event(1, 'attention_required', '2026-11-23T10:00:00Z', {
+      reason: 'blocked_without_pr',
+    });
+    const latest = latestByIssue([blocked], 'o/r');
+    const view = (observedAt: string, stage: string) => ({
+      observedAt,
+      stages: new Map([[7, stage]]),
+    });
+    expect(issueEvent(latest, 7, view('2026-11-23T10:08:00Z', 'running'))).toBeUndefined();
+    expect(issueEvent(latest, 7, view('2026-11-23T10:08:00Z', 'blocked'))!.id).toBe(1);
+    expect(issueEvent(latest, 7, view('2026-11-23T09:50:00Z', 'running'))!.id).toBe(1);
+    expect(
+      issueEvent(latest, 7, { observedAt: '2026-11-23T10:08:00Z', stages: new Map() })!.id,
+    ).toBe(1);
+  });
   it('reads the last 24 hours and shows nothing where the broker has no events yet', async () => {
     const fetcher = vi.fn(async () =>
       Response.json({ events: [event(1, 'run_failed', 't', { error: null })] }),

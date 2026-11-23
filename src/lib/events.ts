@@ -113,6 +113,8 @@ export function repositoryRefusal(
     : refusal;
 }
 
+const runningStages = new Set(['starting', 'running', 'retry', 'queued', 'awaiting-pr']);
+
 /** The event to show next to one issue: a refusal is left out once the live view shows the issue past it. */
 export function issueEvent(
   latest: ReadonlyMap<number, RuntimeEvent>,
@@ -120,6 +122,8 @@ export function issueEvent(
   live?: LiveView,
 ): RuntimeEvent | undefined {
   const e = latest.get(issueNumber);
+  if (e?.type === 'attention_required' && live?.observedAt && live.observedAt > e.at)
+    return runningStages.has(live.stages.get(issueNumber) ?? '') ? undefined : e;
   if (!e || !outdated(e, live)) return e;
   return live!.stages.get(issueNumber) === 'refused' ? e : undefined;
 }
