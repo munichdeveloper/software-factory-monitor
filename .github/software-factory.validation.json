@@ -3,5 +3,19 @@
   "profile": "npm",
   "timeoutMinutes": 20,
   "composeProjectPrefix": "sf-validation",
+  "generated": [
+    {
+      "command": "npm run lint",
+      "paths": [
+        "src"
+      ]
+    },
+    {
+      "command": "npm run format:check",
+      "paths": [
+        "src"
+      ]
+    }
+  ],
   "environment": {}
 }
