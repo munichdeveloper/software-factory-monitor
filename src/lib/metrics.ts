@@ -8,6 +8,15 @@ const distributionSchema = z.object({
   medianMs: ms,
   p90Ms: ms,
 });
+/** How a Factory issue ended (software-factory#239); absent from older brokers. */
+export const outcomeClasses = [
+  'automatic',
+  'approved',
+  'replacement',
+  'human-merge',
+  'abandoned',
+] as const;
+const outcomeSchema = z.enum(outcomeClasses);
 const itemSchema = z.object({
   repository: z.string(),
   issueNumber: z.number().int(),
@@ -20,6 +29,9 @@ const itemSchema = z.object({
   mergedAt: z.string(),
   leadMs: ms,
   waitMs: ms,
+  outcome: outcomeSchema.optional(),
+  netLeadMs: ms.optional(),
+  humanWaitMs: ms.optional(),
   pickupMs: ms,
   codingRuns: z.number().int(),
   failedCodingRuns: z.number().int(),
@@ -113,6 +125,12 @@ export const metricsViewSchema = z.object({
     factory: distributionSchema,
     human: distributionSchema.extend({ wait: distributionSchema }),
     unknownIntake: z.number().int(),
+    net: distributionSchema
+      .extend({ byClass: z.record(z.string(), distributionSchema).optional() })
+      .optional(),
+    humanWait: distributionSchema
+      .extend({ issuesWithWait: z.number().int().optional() })
+      .optional(),
   }),
   flow: z.object({
     merged: z.number().int(),
@@ -128,6 +146,20 @@ export const metricsViewSchema = z.object({
     codingRun: distributionSchema,
     codingShare: ratio,
     reviewsPerMerge: ratio,
+    outcomes: z
+      .object({
+        counts: z.object({
+          automatic: z.number().int(),
+          approved: z.number().int(),
+          replacement: z.number().int(),
+          'human-merge': z.number().int(),
+          abandoned: z.number().int(),
+        }),
+        closed: z.number().int(),
+        unclassified: z.number().int().optional(),
+        automationRate: ratio,
+      })
+      .optional(),
   }),
   weekly: z.array(
     z.object({

@@ -4,6 +4,7 @@ import { errorLabels } from '@/lib/labels';
 import type { LoadedMetrics } from '@/lib/load';
 import {
   duration,
+  outcomeClasses,
   share,
   type Distribution,
   type MetricsView,
@@ -27,8 +28,32 @@ const spread = (d: Distribution) =>
 const number = (value: number | null) =>
   value === null ? '–' : value.toLocaleString('de-DE', { maximumFractionDigits: 2 });
 
+const outcomeLabels: Record<(typeof outcomeClasses)[number], string> = {
+  automatic: 'Vollautomatisch',
+  approved: 'Mit Freigabe',
+  replacement: 'Ersatz-PR',
+  'human-merge': 'Menschlicher Eingriff',
+  abandoned: 'Abgebrochen',
+};
+
+function Outcomes({ outcomes }: { outcomes: NonNullable<MetricsView['flow']['outcomes']> }) {
+  return (
+    <ul className="muted outcome-list">
+      {outcomeClasses.map((c) => {
+        const n = outcomes.counts[c];
+        return (
+          <li key={c}>
+            {outcomeLabels[c]}: {n} ({share(outcomes.closed ? n / outcomes.closed : null)})
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function LeadTimes({ view }: { view: MetricsView }) {
-  const { factory, human } = view.leadTime;
+  const { factory, human, net, humanWait: wait } = view.leadTime;
+  const outcomes = view.flow.outcomes;
   return (
     <section className="kpis" aria-label="Durchlaufzeiten">
       <div className="kpi">
@@ -52,13 +77,43 @@ function LeadTimes({ view }: { view: MetricsView }) {
           Übergabe bis Merge · {human.wait.count ? spread(human.wait) : 'noch keine Daten'}
         </span>
       </div>
-      <div className="kpi">
-        <span className="value">{share(view.flow.automationRate)}</span>
-        <span className="label">Automatisierungsquote</span>
-        <span className="muted">
-          {view.flow.mergedByFactory} von {view.flow.merged} Merges durch die Factory
-        </span>
-      </div>
+      {outcomes ? (
+        <div className="kpi">
+          <span className="value">{share(outcomes.automationRate)}</span>
+          <span className="label">Automatisierungsquote</span>
+          <span className="muted">
+            vollautomatisch plus mit Freigabe, an {outcomes.closed} abgeschlossenen Issues
+          </span>
+          <Outcomes outcomes={outcomes} />
+        </div>
+      ) : (
+        <div className="kpi">
+          <span className="value">{share(view.flow.automationRate)}</span>
+          <span className="label">Automatisierungsquote</span>
+          <span className="muted">
+            {view.flow.mergedByFactory} von {view.flow.merged} Merges durch die Factory
+          </span>
+        </div>
+      )}
+      {net && (
+        <div className="kpi">
+          <span className="value">{duration(net.meanMs)}</span>
+          <span className="label">Factory-Zeit (Ø, ohne Wartezeit auf Menschen)</span>
+          <span className="muted">
+            {runs(net.count)} · {spread(net)}
+          </span>
+        </div>
+      )}
+      {wait && (
+        <div className="kpi person">
+          <span className="value">{duration(wait.meanMs)}</span>
+          <span className="label">Wartezeit auf Menschen (Ø)</span>
+          <span className="muted">
+            bei {wait.issuesWithWait ?? wait.count} von {net?.count ?? view.flow.merged} Issues
+            gewartet
+          </span>
+        </div>
+      )}
     </section>
   );
 }
@@ -188,6 +243,7 @@ function Repositories({ view }: { view: MetricsView }) {
 }
 
 function Items({ view }: { view: MetricsView }) {
+  const hasOutcomes = view.items.some((i) => i.outcome !== undefined);
   return (
     <section className="panel">
       <header>
@@ -205,6 +261,9 @@ function Items({ view }: { view: MetricsView }) {
                 <th>Gemergt</th>
                 <th className="num">Durchlaufzeit</th>
                 <th className="num">Wartezeit</th>
+                {hasOutcomes && <th>Ausgang</th>}
+                {hasOutcomes && <th className="num">Netto-Durchlaufzeit</th>}
+                {hasOutcomes && <th className="num">Wartezeit auf Menschen</th>}
                 <th className="num">Coding-Läufe</th>
                 <th className="num">Kosten</th>
               </tr>
@@ -231,6 +290,21 @@ function Items({ view }: { view: MetricsView }) {
                   <td className="muted">{clock(i.mergedAt)}</td>
                   <td className="num">{duration(i.leadMs)}</td>
                   <td className="num">{i.mergedBy === 'human' ? duration(i.waitMs) : ''}</td>
+                  {hasOutcomes && (
+                    <td>
+                      {i.outcome ? (
+                        <span className="chip router">{outcomeLabels[i.outcome]}</span>
+                      ) : (
+                        ''
+                      )}
+                    </td>
+                  )}
+                  {hasOutcomes && (
+                    <td className="num">{i.netLeadMs == null ? '' : duration(i.netLeadMs)}</td>
+                  )}
+                  {hasOutcomes && (
+                    <td className="num">{i.humanWaitMs == null ? '' : duration(i.humanWaitMs)}</td>
+                  )}
                   <td className="num">
                     {i.codingRuns}
                     {i.failedCodingRuns ? (
