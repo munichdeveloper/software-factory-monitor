@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { isCurrent, parseTarget, pendingApproval, withoutCommand } from '../src/lib/approval';
+import {
+  isCurrent,
+  pendingApprovalOf,
+  parseTarget,
+  pendingApproval,
+  withoutCommand,
+} from '../src/lib/approval';
 import { postApproval, signPending, verifyPending } from '../src/lib/approval-server';
-import type { QueueEntry, QueueView } from '../src/lib/queue';
+import { entryMatches, pullRequestMatches } from '../src/lib/queue';
+import type { QueueEntry, QueuePullRequest, QueueView } from '../src/lib/queue';
 
 const id = 'ab'.repeat(32);
 const secret = 's'.repeat(32);
@@ -23,8 +30,53 @@ const view = (e: QueueEntry): QueueView =>
 const target = { repository: 'munichdeveloper/backofficer', pullRequest: 77, approvalId: id };
 
 describe('approval from the monitor', () => {
+  it('offers an approval at approval-required, review-rejected and handover', () => {
+    expect(pendingApproval(entry({}))).toEqual({
+      pullRequest: 77,
+      approvalId: id,
+      overrides: false,
+    });
+    for (const step of ['review-rejected', 'handover'])
+      expect(pendingApproval(entry({ step }))).toEqual({
+        pullRequest: 77,
+        approvalId: id,
+        overrides: true,
+      });
+  });
+  it('offers no button without an approval id from the broker', () => {
+    for (const step of ['review-rejected', 'handover', 'approval-required'])
+      expect(pendingApproval(entry({ step, detail: 'Review zurückgestellt.' }))).toBeNull();
+    expect(pendingApprovalOf(null)).toBeNull();
+  });
+  it('covers adopted pull requests when checking what the broker asks for', () => {
+    const pr = { number: 77, merge: entry({ step: 'handover' }).merge } as QueuePullRequest;
+    const v = {
+      repositories: [{ repository: target.repository, entries: [], pullRequests: [pr] }],
+    } as unknown as QueueView;
+    expect(isCurrent(v, target)).toBe(true);
+    expect(isCurrent(v, { ...target, approvalId: 'cd'.repeat(32) })).toBe(false);
+  });
+  it('finds a pull request by its number and shows the issue', () => {
+    const task = {
+      issueNumber: 36,
+      title: 'MCP 3/5: Lead-Import',
+      pullRequests: ['https://github.com/o/r/pull/45'],
+      merge: { pullRequest: 45 },
+    } as QueueEntry;
+    for (const q of ['45', '#45', ' #36 ', 'lead']) expect(entryMatches(task, q)).toBe(true);
+    for (const q of ['4', '#46', 'xyz']) expect(entryMatches(task, q)).toBe(false);
+    expect(entryMatches(task, '')).toBe(true);
+    const pr = { number: 45, title: 'Fix' } as QueuePullRequest;
+    expect(pullRequestMatches(pr, '#45')).toBe(true);
+    expect(pullRequestMatches(pr, '46')).toBe(false);
+    expect(pullRequestMatches(pr, 'fix')).toBe(true);
+  });
   it('reads the approval id only from an approval-required merge step', () => {
-    expect(pendingApproval(entry({}))).toEqual({ pullRequest: 77, approvalId: id });
+    expect(pendingApproval(entry({}))).toEqual({
+      pullRequest: 77,
+      approvalId: id,
+      overrides: false,
+    });
     expect(pendingApproval(entry({ step: 'gate' }))).toBeNull();
     expect(pendingApproval(entry({ detail: 'Menschliche Freigabe nötig.' }))).toBeNull();
     expect(pendingApproval(entry(null))).toBeNull();

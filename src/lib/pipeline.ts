@@ -123,11 +123,11 @@ function mergeSteps(
       return;
     case 'review-rejected':
       set('checks', 'done');
-      set('review', 'failed', join(merge.detail, risk, later));
+      set('review', 'failed', join(withoutCommand(merge.detail), risk, later));
       return;
     case 'handover':
       set('checks', 'done');
-      set('review', 'person', join(merge.detail, risk, 'Übergabe an dich'));
+      set('review', 'person', join(withoutCommand(merge.detail), risk, 'Übergabe an dich'));
       return;
     case 'approval-required':
       set('checks', 'done');

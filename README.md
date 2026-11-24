@@ -31,7 +31,10 @@ user IDs in `MONITOR_ALLOWED_GITHUB_IDS` get a session. Sessions are signed cook
 
 When the Factory hands a pull request over because its risk class is above `merge.risk.autoMergeUpTo`, the merge
 step shows a button **Freigeben**. It posts the comment the Factory asks for, `/harness approve <id>`, on the pull
-request, as the signed-in person:
+request, as the signed-in person. The button also appears at the merge steps `review-rejected` and `handover` when
+the broker offers an id for the reviewed head (software-factory#287), labelled **Trotz Zurückstellung freigeben**
+(a `defer` can be overruled, a `request_changes` or blocking findings never get an id). Without an id there is no
+button. The search box finds a task or pull request by number (`45`, `#45`) or title.
 
 1. The form post (same origin only) is checked against the broker's current queue: only an id the merge pass
    currently asks for, for that repository and pull request, is accepted.
