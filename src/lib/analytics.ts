@@ -49,6 +49,72 @@ const modelSchema = z.object({
   unknownCostCalls: z.number().int(),
   failed: z.number().int(),
 });
+const metricNumber = z.number().nullish();
+const metricsSchema = z.object({
+  costUsd: metricNumber,
+  requests: metricNumber,
+  turns: metricNumber,
+  durationMinutes: metricNumber,
+  fixedContextTokens: metricNumber,
+  reads: metricNumber,
+  duplicateReads: metricNumber,
+  readsOutsideDiff: metricNumber,
+  edits: metricNumber,
+  testOrBuildCommands: metricNumber,
+  failedTools: metricNumber,
+  documentationReads: metricNumber,
+  changedFiles: metricNumber,
+  changedLines: metricNumber,
+  costPerChangedLine: metricNumber,
+  traceTruncated: z.boolean().nullish(),
+  traceMissing: z.boolean().nullish(),
+});
+/** Verdicts and waste categories are plain strings: unknown ones are shown raw, never dropped. */
+const judgementSchema = z
+  .object({
+    verdict: z.string(),
+    fairCostUsd: z.number(),
+    waste: z.array(z.object({ category: z.string(), usd: z.number(), note: z.string() })),
+    reason: z.string(),
+  })
+  .nullable();
+const costEvalSchema = z.object({
+  repository: z.string(),
+  issueNumber: z.number().int(),
+  executionId: z.string(),
+  model: z.string(),
+  effort: z.string(),
+  costUsd: z.number().nullable(),
+  outcome: z.string().nullable(),
+  metrics: metricsSchema,
+  judgement: judgementSchema,
+  evalModel: z.string(),
+  shadow: z.boolean(),
+  error: z.string().nullable(),
+  at: z.string(),
+});
+const costReportSchema = z
+  .object({
+    week: z.string(),
+    model: z.string(),
+    error: z.string().nullable(),
+    at: z.string(),
+    report: z
+      .object({
+        summary: z.string(),
+        patterns: z.array(
+          z.object({
+            category: z.string(),
+            usd: z.number(),
+            runs: z.number(),
+            evidence: z.string(),
+            proposal: z.string(),
+          }),
+        ),
+      })
+      .nullable(),
+  })
+  .nullable();
 export const analyticsViewSchema = z.object({
   generatedAt: z.string(),
   from: z.string(),
@@ -67,10 +133,13 @@ export const analyticsViewSchema = z.object({
   weekly: z.array(z.object({ week: z.string(), step: z.string(), costUsd: z.number() })),
   models: z.array(modelSchema),
   features: z.array(featureSchema),
+  costEvals: z.array(costEvalSchema).optional(),
+  costReport: costReportSchema.optional(),
 });
 export type AnalyticsView = z.infer<typeof analyticsViewSchema>;
 export type AnalyticsFeature = z.infer<typeof featureSchema>;
 export type AnalyticsCall = z.infer<typeof callSchema>;
+export type CostEval = z.infer<typeof costEvalSchema>;
 
 export const periods = [7, 30, 90] as const;
 /** Query of the analytics page: a period of 7, 30 or 90 days and an optional owner/name. */
@@ -129,6 +198,7 @@ export const stepLabels: Record<string, string> = {
   risk: 'Risikobewertung',
   planner: 'Planung',
   reconcile: 'Bestandsaufnahme',
+  'cost-eval': 'Kosten-Eval',
 };
 export const stepOrder = ['coding', 'review', 'risk', 'planner'];
 export const selectionLabels: Record<string, string> = {
@@ -170,4 +240,34 @@ export function weekRows(view: AnalyticsView) {
       steps,
       total: Object.values(steps).reduce((s, v) => s + v, 0),
     }));
+}
+
+export const verdictLabels: Record<string, string> = {
+  appropriate: 'angemessen',
+  expensive: 'teuer',
+  wasteful: 'verschwenderisch',
+};
+/** Badge colour class of a verdict; unknown verdicts stay neutral. */
+export const verdictClass = (verdict: string) =>
+  ({ appropriate: 'active', expensive: 'person', wasteful: 'stuck' })[verdict] ?? '';
+export const wasteLabels: Record<string, string> = {
+  'unnecessary-reads': 'Unnötige Leserunden',
+  'repeated-tests': 'Wiederholte Tests/Builds',
+  'model-too-strong': 'Zu starkes Modell',
+  'restart-after-deterministic-failure': 'Neustart nach deterministischem Fehler',
+  'documentation-reading': 'Doku-Lesen',
+  'dead-end': 'Sackgasse',
+  'fixed-context': 'Fixkosten Kontext',
+};
+/** "claude-haiku-5-5" -> "Haiku"; unknown names are returned as they are. */
+export function shortModel(model: string): string {
+  const m = /(opus|sonnet|haiku|fable)/i.exec(model);
+  return m ? m[1]!.charAt(0).toUpperCase() + m[1]!.slice(1).toLowerCase() : model;
+}
+/** The main (non-shadow) evaluation and the shadow evaluation of one coding run, matched by executionId. */
+export function evalsFor(view: Pick<AnalyticsView, 'costEvals'>, executionId: string | null) {
+  const rows = executionId
+    ? (view.costEvals ?? []).filter((e) => e.executionId === executionId)
+    : [];
+  return { main: rows.find((e) => !e.shadow), shadow: rows.find((e) => e.shadow) };
 }
