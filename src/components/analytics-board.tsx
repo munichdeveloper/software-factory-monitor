@@ -14,6 +14,8 @@ import {
   verdictClass,
   verdictLabels,
   wasteLabels,
+  costEvalSummary,
+  shadowAgreement,
   type CostEval,
   type AnalyticsFeature,
   type AnalyticsView,
@@ -350,6 +352,121 @@ function Feature({ feature, view }: { feature: AnalyticsFeature; view: Analytics
   );
 }
 
+function CostEvalPanel({ view }: { view: AnalyticsView }) {
+  const summary = costEvalSummary(view);
+  const calibration = shadowAgreement(view);
+  const report = view.costReport;
+  const maxWaste = Math.max(...summary.waste.map((w) => w.usd), 0);
+  return (
+    <section className="panel cost-eval">
+      <header>
+        <h2>Kosten-Eval</h2>
+        <span className="muted">Bewertung jedes Coding-Laufs durch das Hauptmodell</span>
+      </header>
+      {summary.runs === 0 ? (
+        <p className="empty">Noch keine bewerteten Läufe in diesem Zeitraum.</p>
+      ) : (
+        <>
+          <div className="eval-kpis">
+            <div>
+              <span className="value">{summary.runs}</span>
+              <span className="muted">bewertete Läufe</span>
+            </div>
+            <div>
+              <span className="value">{usd(summary.costUsd)}</span>
+              <span className="muted">ausgegeben</span>
+            </div>
+            <div>
+              <span className="value">{usd(summary.fairCostUsd)}</span>
+              <span className="muted">angemessen wären</span>
+            </div>
+          </div>
+          <ul className="verdicts" aria-label="Urteile">
+            {summary.verdicts.map((v) => (
+              <li key={v.verdict}>
+                <span className={`badge ${verdictClass(v.verdict)}`}>
+                  {verdictLabels[v.verdict] ?? v.verdict}
+                </span>{' '}
+                {v.runs}
+              </li>
+            ))}
+          </ul>
+          {summary.waste.length > 0 && (
+            <>
+              <h3>Häufigste Verschwendung</h3>
+              <div className="weeks waste" role="img" aria-label="Vermeidbare Kosten je Kategorie">
+                {summary.waste.map((w) => (
+                  <div className="week" key={w.category}>
+                    <span className="week-label">{wasteLabels[w.category] ?? w.category}</span>
+                    <span
+                      className="bar"
+                      style={{ width: `${maxWaste ? (w.usd / maxWaste) * 100 : 0}%` }}
+                    >
+                      <span className="segment step-coding" style={{ flexGrow: 1 }} />
+                    </span>
+                    <span className="num">{usd(w.usd)}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
+      {report?.report && (
+        <>
+          <h3>Wochenbericht ab {shortDate(report.week)}</h3>
+          <p>{report.report.summary}</p>
+          {report.report.patterns.length > 0 && (
+            <ul className="patterns">
+              {report.report.patterns.map((p, i) => (
+                <li key={`${p.category}-${i}`}>
+                  <strong>{wasteLabels[p.category] ?? p.category}</strong>{' '}
+                  <span className="num">{usd(p.usd)}</span>
+                  <span className="muted"> in {p.runs} Läufen</span>
+                  <div className="muted">{p.evidence}</div>
+                  <div>{p.proposal}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+      {report?.error && <p className="alert">Wochenbericht fehlgeschlagen</p>}
+      {calibration.length > 0 && (
+        <>
+          <h3>Kalibrierung</h3>
+          <div className="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Hauptmodell</th>
+                  <th>Schattenmodell</th>
+                  <th className="num">Übereinstimmung</th>
+                  <th className="num">Paare</th>
+                  <th className="num">⌀ angemessen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {calibration.map((c) => (
+                  <tr key={`${c.mainModel}|${c.shadowModel}`}>
+                    <td>{shortModel(c.mainModel)}</td>
+                    <td>{shortModel(c.shadowModel)}</td>
+                    <td className="num">{Math.round(c.agreement * 100)} %</td>
+                    <td className="num">{c.pairs}</td>
+                    <td className="num">
+                      {usd(c.mainFairUsd)} / {usd(c.shadowFairUsd)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 export function AnalyticsBoard({
   loaded,
   query,
@@ -428,6 +545,7 @@ export function AnalyticsBoard({
               <Models view={view} />
             </div>
           )}
+          {view.costEvals && <CostEvalPanel view={view} />}
           <section className="panel">
             <header>
               <h2>Features</h2>

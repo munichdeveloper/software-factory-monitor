@@ -584,6 +584,32 @@ export function demoAnalytics(now = new Date()): AnalyticsView {
         reason: 'Der Aufwand passt zur Größe der Änderung.',
       }),
     ],
+    costReport: {
+      week: ago(7).slice(0, 10),
+      model: 'claude-opus-5-5',
+      error: null,
+      at: ago(0, 6),
+      report: {
+        summary:
+          'Das meiste vermeidbare Geld geht in Leserunden außerhalb des Diffs und in zu starke Modelle für kleine Änderungen.',
+        patterns: [
+          {
+            category: 'unnecessary-reads',
+            usd: 1.1,
+            runs: 1,
+            evidence: 'munichdeveloper/demo#1: 31 Dateien außerhalb des Diffs gelesen',
+            proposal: 'Dem Agenten die betroffenen Dateien aus dem Issue vorab nennen.',
+          },
+          {
+            category: 'model-too-strong',
+            usd: 1.0,
+            runs: 1,
+            evidence: 'munichdeveloper/demo#1: Opus high für eine Textänderung',
+            proposal: 'Router-Schwelle für Opus anheben.',
+          },
+        ],
+      },
+    },
   };
 }
 

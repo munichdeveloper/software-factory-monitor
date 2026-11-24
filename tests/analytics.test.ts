@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   analyticsQuery,
   analyticsViewSchema,
+  costEvalSummary,
+  shadowAgreement,
   evalsFor,
   fetchAnalytics,
   shortModel,
@@ -118,5 +120,126 @@ describe('cost evaluations', () => {
     expect(wasteLabels['dead-end']).toBe('Sackgasse');
     expect(shortModel('claude-haiku-5-5')).toBe('Haiku');
     expect(shortModel('gpt-6.1-sol')).toBe('gpt-6.1-sol');
+  });
+});
+
+describe('cost evaluation overview', () => {
+  const judgement = (
+    verdict: string,
+    fairCostUsd: number,
+    waste: { category: string; usd: number }[] = [],
+  ) => ({
+    verdict,
+    fairCostUsd,
+    reason: 'x',
+    waste: waste.map((w) => ({ ...w, note: 'n' })),
+  });
+  const row = (over: Record<string, unknown>) => ({
+    repository: 'o/a',
+    issueNumber: 1,
+    executionId: 'a'.repeat(32),
+    model: 'claude-opus-5-5',
+    effort: 'high',
+    costUsd: 2,
+    outcome: 'success',
+    metrics: {},
+    judgement: judgement('appropriate', 2),
+    evalModel: 'claude-sonnet-5-5',
+    shadow: false,
+    error: null,
+    at: '2026-11-24T08:00:00Z',
+    ...over,
+  });
+  const view = (rows: Record<string, unknown>[], repository: string | null = null) =>
+    analyticsViewSchema
+      .pick({ costEvals: true, repository: true })
+      .parse({ costEvals: rows, repository });
+
+  it('sums the main verdicts without shadow or failed rows and orders waste by dollars', () => {
+    const rows = [
+      row({
+        judgement: judgement('wasteful', 0.5, [
+          { category: 'unnecessary-reads', usd: 1 },
+          { category: 'dead-end', usd: 0.3 },
+        ]),
+      }),
+      row({
+        executionId: 'b'.repeat(32),
+        costUsd: 3,
+        judgement: judgement('expensive', 2, [
+          { category: 'dead-end', usd: 0.9 },
+          { category: 'fixed-context', usd: 0 },
+        ]),
+      }),
+      row({ executionId: 'c'.repeat(32), costUsd: null, judgement: judgement('appropriate', 1) }),
+      row({
+        shadow: true,
+        evalModel: 'claude-haiku-5-5',
+        judgement: judgement('wasteful', 9, [{ category: 'dead-end', usd: 9 }]),
+      }),
+      row({ executionId: 'd'.repeat(32), judgement: null, error: 'CLAUDE_HTTP_529' }),
+      row({
+        executionId: 'e'.repeat(32),
+        repository: 'o/b',
+        judgement: judgement('wasteful', 0, [{ category: 'dead-end', usd: 5 }]),
+      }),
+    ];
+    const all = costEvalSummary(view(rows));
+    expect(all.runs).toBe(4);
+    expect(all.verdicts).toEqual([
+      { verdict: 'appropriate', runs: 1 },
+      { verdict: 'expensive', runs: 1 },
+      { verdict: 'wasteful', runs: 2 },
+    ]);
+    expect(all.costUsd).toBe(7);
+    expect(all.fairCostUsd).toBeCloseTo(3.5);
+    expect(all.waste.map((w) => w.category)).toEqual(['dead-end', 'unnecessary-reads']);
+    expect(all.waste[0]!.usd).toBeCloseTo(6.2);
+    const one = costEvalSummary(view(rows, 'o/a'));
+    expect(one.runs).toBe(3);
+    expect(one.waste.map((w) => w.category)).toEqual(['dead-end', 'unnecessary-reads']);
+    expect(one.waste[0]!.usd).toBeCloseTo(1.2);
+    expect(costEvalSummary(view([])).runs).toBe(0);
+  });
+
+  it('measures how often the shadow model agrees with the main model on the same run', () => {
+    const rows = [
+      row({ judgement: judgement('wasteful', 1) }),
+      row({ shadow: true, evalModel: 'claude-haiku-5-5', judgement: judgement('wasteful', 2) }),
+      row({ executionId: 'b'.repeat(32), judgement: judgement('appropriate', 3) }),
+      row({
+        executionId: 'b'.repeat(32),
+        shadow: true,
+        evalModel: 'claude-haiku-5-5',
+        judgement: judgement('expensive', 1),
+      }),
+      row({ executionId: 'c'.repeat(32), shadow: true, evalModel: 'claude-haiku-5-5' }),
+      row({ executionId: 'd'.repeat(32), judgement: judgement('wasteful', 1) }),
+      row({
+        executionId: 'd'.repeat(32),
+        shadow: true,
+        evalModel: 'claude-haiku-5-5',
+        judgement: null,
+        error: 'x',
+      }),
+    ];
+    expect(shadowAgreement(view(rows))).toEqual([
+      {
+        mainModel: 'claude-sonnet-5-5',
+        shadowModel: 'claude-haiku-5-5',
+        pairs: 2,
+        agreement: 0.5,
+        mainFairUsd: 2,
+        shadowFairUsd: 1.5,
+      },
+    ]);
+    expect(shadowAgreement(view(rows, 'o/other'))).toEqual([]);
+  });
+
+  it('shows the overview with a weekly report and a calibration in the demo data', () => {
+    const demo = demoAnalytics(new Date('2026-11-24T12:00:00Z'));
+    expect(costEvalSummary(demo).runs).toBeGreaterThan(0);
+    expect(shadowAgreement(demo)).toHaveLength(1);
+    expect(demo.costReport?.report?.patterns.length).toBeGreaterThan(0);
   });
 });
