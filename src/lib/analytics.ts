@@ -271,3 +271,90 @@ export function evalsFor(view: Pick<AnalyticsView, 'costEvals'>, executionId: st
     : [];
   return { main: rows.find((e) => !e.shadow), shadow: rows.find((e) => e.shadow) };
 }
+
+/** Main (non-shadow) evaluations with a judgement, within the page's repository filter. */
+function judged(view: Pick<AnalyticsView, 'costEvals' | 'repository'>) {
+  return (view.costEvals ?? []).filter(
+    (e) => !e.shadow && e.judgement && (!view.repository || e.repository === view.repository),
+  );
+}
+export interface CostEvalSummary {
+  runs: number;
+  verdicts: { verdict: string; runs: number }[];
+  costUsd: number;
+  fairCostUsd: number;
+  waste: { category: string; usd: number }[];
+}
+/** Totals of the main model's verdicts: runs per verdict, spent vs. fair cost, avoidable dollars per waste category. */
+export function costEvalSummary(
+  view: Pick<AnalyticsView, 'costEvals' | 'repository'>,
+): CostEvalSummary {
+  const rows = judged(view);
+  const verdicts = new Map<string, number>();
+  const waste = new Map<string, number>();
+  let costUsd = 0;
+  let fairCostUsd = 0;
+  for (const e of rows) {
+    const j = e.judgement!;
+    verdicts.set(j.verdict, (verdicts.get(j.verdict) ?? 0) + 1);
+    costUsd += e.costUsd ?? 0;
+    fairCostUsd += j.fairCostUsd;
+    for (const w of j.waste) waste.set(w.category, (waste.get(w.category) ?? 0) + w.usd);
+  }
+  const order = Object.keys(verdictLabels);
+  const rank = (v: string) => (order.includes(v) ? order.indexOf(v) : order.length);
+  return {
+    runs: rows.length,
+    verdicts: [...verdicts.entries()]
+      .map(([verdict, runs]) => ({ verdict, runs }))
+      .sort((a, b) => rank(a.verdict) - rank(b.verdict) || a.verdict.localeCompare(b.verdict)),
+    costUsd,
+    fairCostUsd,
+    waste: [...waste.entries()]
+      .map(([category, usd]) => ({ category, usd }))
+      .filter((w) => w.usd > 0)
+      .sort((a, b) => b.usd - a.usd || a.category.localeCompare(b.category)),
+  };
+}
+export interface ShadowAgreement {
+  mainModel: string;
+  shadowModel: string;
+  pairs: number;
+  agreement: number;
+  mainFairUsd: number;
+  shadowFairUsd: number;
+}
+/**
+ * Calibration of the shadow model: per model pair, how often it gave the same verdict as the main model on the same run,
+ * and the average fair cost each estimated. Only runs both judged count.
+ */
+export function shadowAgreement(
+  view: Pick<AnalyticsView, 'costEvals' | 'repository'>,
+): ShadowAgreement[] {
+  const all = (view.costEvals ?? []).filter(
+    (e) => e.judgement && (!view.repository || e.repository === view.repository),
+  );
+  const pairs = new Map<string, { same: number; n: number; main: number; shadow: number }>();
+  for (const shadow of all.filter((e) => e.shadow)) {
+    const main = all.find((e) => !e.shadow && e.executionId === shadow.executionId);
+    if (!main) continue;
+    const key = `${main.evalModel}\n${shadow.evalModel}`;
+    const p = pairs.get(key) ?? { same: 0, n: 0, main: 0, shadow: 0 };
+    p.n += 1;
+    if (main.judgement!.verdict === shadow.judgement!.verdict) p.same += 1;
+    p.main += main.judgement!.fairCostUsd;
+    p.shadow += shadow.judgement!.fairCostUsd;
+    pairs.set(key, p);
+  }
+  return [...pairs.entries()].map(([key, p]) => {
+    const [mainModel, shadowModel] = key.split('\n') as [string, string];
+    return {
+      mainModel,
+      shadowModel,
+      pairs: p.n,
+      agreement: p.same / p.n,
+      mainFairUsd: p.main / p.n,
+      shadowFairUsd: p.shadow / p.n,
+    };
+  });
+}
