@@ -1,4 +1,4 @@
-import type { QueueEntry, QueueView } from './queue';
+import type { MergeProgress, QueueEntry, QueueView } from './queue';
 
 /**
  * Approving a pull request from the monitor (merge step "approval-required").
@@ -23,16 +23,30 @@ export type ApprovalTarget = { repository: string; pullRequest: number; approval
 
 export const approvalCommand = (approvalId: string) => `/harness approve ${approvalId}`;
 
-/** The approval a task's pull request waits for, read from the broker's merge progress; null if none. */
-export function pendingApproval(
-  entry: QueueEntry,
-): { pullRequest: number; approvalId: string } | null {
-  const merge = entry.merge;
-  if (!merge || merge.step !== 'approval-required' || !merge.detail) return null;
+/** Merge steps at which the broker may offer an approval: the risk gate and a review that handed over or deferred. */
+const approvalSteps = ['approval-required', 'review-rejected', 'handover'];
+
+export type PendingApproval = {
+  pullRequest: number;
+  approvalId: string;
+  /** True when the approval overrules a deferral by the review (the broker offers it for review-rejected/handover). */
+  overrides: boolean;
+};
+
+/** The approval a pull request waits for, read from the broker's merge progress; null if the broker offers none. */
+export function pendingApprovalOf(merge: MergeProgress | null): PendingApproval | null {
+  if (!merge || !approvalSteps.includes(merge.step) || !merge.detail) return null;
   const match = merge.detail.match(commandPattern);
   if (!match || !Number.isSafeInteger(merge.pullRequest) || merge.pullRequest <= 0) return null;
-  return { pullRequest: merge.pullRequest, approvalId: match[1]! };
+  return {
+    pullRequest: merge.pullRequest,
+    approvalId: match[1]!,
+    overrides: merge.step !== 'approval-required',
+  };
 }
+
+/** The approval a task's pull request waits for; null if none. */
+export const pendingApproval = (entry: QueueEntry) => pendingApprovalOf(entry.merge);
 
 /** The merge-progress text without the command, for where the monitor offers the button instead. */
 export function withoutCommand(detail: string | null): string | null {
@@ -47,10 +61,14 @@ export function withoutCommand(detail: string | null): string | null {
 /** Whether the broker's current view still asks for exactly this approval. */
 export function isCurrent(view: QueueView, target: ApprovalTarget): boolean {
   const repository = view.repositories.find((r) => r.repository === target.repository);
-  return !!repository?.entries.some((e) => {
-    const pending = pendingApproval(e);
-    return pending?.pullRequest === target.pullRequest && pending.approvalId === target.approvalId;
-  });
+  const offered = [
+    ...(repository?.entries ?? []).map((e) => pendingApproval(e)),
+    ...(repository?.pullRequests ?? []).map((pr) => pendingApprovalOf(pr.merge)),
+  ];
+  return offered.some(
+    (pending) =>
+      pending?.pullRequest === target.pullRequest && pending.approvalId === target.approvalId,
+  );
 }
 
 /** Validates the form fields of an approval request; null for anything malformed. */

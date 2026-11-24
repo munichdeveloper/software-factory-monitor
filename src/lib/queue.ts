@@ -96,6 +96,30 @@ export type QueueRepository = z.infer<typeof repositorySchema>;
 export type QueuePullRequest = z.infer<typeof pullRequestSchema>;
 export type QueueView = z.infer<typeof queueViewSchema>;
 
+/** Whether a search text ("45", "#45" or words of the title) matches a task, its issue number or any of its pull requests. */
+export function entryMatches(entry: QueueEntry, query: string): boolean {
+  const text = query.trim().toLowerCase();
+  if (!text) return true;
+  const number = /^#?(\d+)$/.exec(text)?.[1];
+  if (number) {
+    const n = Number(number);
+    return (
+      entry.issueNumber === n ||
+      entry.merge?.pullRequest === n ||
+      entry.pullRequests.some((url) => url.match(/\/pull\/(\d+)\/?$/)?.[1] === number)
+    );
+  }
+  return entry.title.toLowerCase().includes(text);
+}
+/** Whether a search text matches an adopted pull request by its number or title. */
+export function pullRequestMatches(pr: QueuePullRequest, query: string): boolean {
+  const text = query.trim().toLowerCase();
+  if (!text) return true;
+  const number = /^#?(\d+)$/.exec(text)?.[1];
+  if (number) return pr.number === Number(number);
+  return !!pr.title?.toLowerCase().includes(text);
+}
+
 /** Groups for the summary: what a person looks at first. */
 export const groups = {
   active: ['starting', 'running'],

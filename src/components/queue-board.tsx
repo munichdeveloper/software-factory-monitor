@@ -3,7 +3,10 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Loaded } from '@/lib/load';
 import {
+  entryMatches,
   groupOf,
+  pullRequestMatches,
+  type MergeProgress,
   groups,
   nextReconcile,
   pullRequestGroup,
@@ -32,7 +35,7 @@ import {
   type PipelineStep,
   type StepState,
 } from '@/lib/pipeline';
-import { approvalResultLabels, pendingApproval } from '@/lib/approval';
+import { approvalResultLabels, pendingApprovalOf } from '@/lib/approval';
 
 export type ApprovalResult = { result: string; id: string | null } | null;
 
@@ -125,15 +128,15 @@ function Pipeline({ entry }: { entry: QueueEntry }) {
  */
 function Approve({
   repository,
-  entry,
+  merge,
   sent,
 }: {
   repository: string;
-  entry: QueueEntry;
+  merge: MergeProgress | null;
   sent: string | null;
 }) {
   const [confirming, setConfirming] = useState(false);
-  const pending = pendingApproval(entry);
+  const pending = pendingApprovalOf(merge);
   if (!pending) return null;
   if (sent === pending.approvalId)
     return (
@@ -150,8 +153,9 @@ function Approve({
         <>
           <span>
             PR #{pending.pullRequest} freigeben
-            {entry.merge?.risk ? ` (Risiko ${entry.merge.risk})` : ''}? Der Kommentar wird in deinem
-            Namen gepostet.
+            {merge?.risk ? ` (Risiko ${merge.risk})` : ''}
+            {pending.overrides ? ' trotz Zurückstellung durch das Review' : ''}? Der Kommentar wird
+            in deinem Namen gepostet.
           </span>
           <button type="submit" className="primary">
             Ja, freigeben
@@ -162,7 +166,7 @@ function Approve({
         </>
       ) : (
         <button type="button" className="primary" onClick={() => setConfirming(true)}>
-          Freigeben
+          {pending.overrides ? 'Trotz Zurückstellung freigeben' : 'Freigeben'}
         </button>
       )}
     </form>
@@ -192,7 +196,17 @@ const pullRequestGroupText: Record<Group, string> = {
 };
 
 /** A pull request the Factory merges without a task of its own (sf:automerge): only checks, review and merge. */
-function PullRequestEntry({ pr, now }: { pr: QueuePullRequest; now: number }) {
+function PullRequestEntry({
+  pr,
+  repository,
+  now,
+  approved,
+}: {
+  pr: QueuePullRequest;
+  repository: string;
+  now: number;
+  approved: string | null;
+}) {
   const group = pullRequestGroup(pr);
   return (
     <li className={`entry ${group}`}>
@@ -207,6 +221,7 @@ function PullRequestEntry({ pr, now }: { pr: QueuePullRequest; now: number }) {
         <div className="pipeline-wrap">
           <Steps steps={pullRequestPipeline(pr)} />
         </div>
+        <Approve repository={repository} merge={pr.merge} sent={approved} />
       </div>
       <span className={`badge ${group}`}>{pullRequestGroupText[group]}</span>
       <span className="meta">
@@ -288,7 +303,7 @@ function Entry({
           </div>
         )}
         <Pipeline entry={entry} />
-        <Approve repository={repository} entry={entry} sent={approved} />
+        <Approve repository={repository} merge={entry.merge} sent={approved} />
       </div>
       <span className={`badge ${group ?? ''}`}>{stageText(entry)}</span>
       <span className="meta">
@@ -307,6 +322,7 @@ function Entry({
 function Repository({
   repository,
   filter,
+  query,
   view,
   now,
   events,
@@ -314,6 +330,7 @@ function Repository({
 }: {
   repository: QueueRepository;
   filter: Group | null;
+  query: string;
   view: QueueView;
   now: number;
   events: RuntimeEvent[];
@@ -326,11 +343,15 @@ function Repository({
   };
   const refusal = repositoryRefusal(events, repository.repository, live);
   // Finished tasks leave the list at once; the "Erledigt (24 h)" tile still counts them and shows them when selected.
-  const entries = repository.entries.filter((e) =>
-    filter ? groupOf(e.stage) === filter : groupOf(e.stage) !== 'done',
+  const entries = repository.entries.filter(
+    (e) =>
+      (filter ? groupOf(e.stage) === filter : groupOf(e.stage) !== 'done') &&
+      entryMatches(e, query),
   );
-  const pullRequests = repository.pullRequests.filter((pr) =>
-    filter ? pullRequestGroup(pr) === filter : pullRequestGroup(pr) !== 'done',
+  const pullRequests = repository.pullRequests.filter(
+    (pr) =>
+      (filter ? pullRequestGroup(pr) === filter : pullRequestGroup(pr) !== 'done') &&
+      pullRequestMatches(pr, query),
   );
   // Positions count only what still waits to be started, in the broker's order.
   let waiting = 0;
@@ -386,13 +407,21 @@ function Repository({
         </ol>
       ) : (
         !pullRequests.length && (
-          <p className="empty">{filter ? 'Nichts in dieser Gruppe.' : 'Keine offenen Aufgaben.'}</p>
+          <p className="empty">
+            {filter || query.trim() ? 'Nichts gefunden.' : 'Keine offenen Aufgaben.'}
+          </p>
         )
       )}
       {pullRequests.length > 0 && (
         <ol className="entries" aria-label="Übernommene Pull Requests">
           {pullRequests.map((pr) => (
-            <PullRequestEntry key={pr.number} pr={pr} now={now} />
+            <PullRequestEntry
+              key={pr.number}
+              pr={pr}
+              repository={repository.repository}
+              now={now}
+              approved={approved}
+            />
           ))}
         </ol>
       )}
@@ -414,6 +443,7 @@ export function QueueBoard({
   const [now, setNow] = useState(() => Date.parse(initial.view?.generatedAt ?? '') || 0);
   const [filter, setFilter] = useState<Group | null>(null);
   const [repo, setRepo] = useState('');
+  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -496,6 +526,15 @@ export function QueueBoard({
           ))}
         </nav>
       )}
+      <label className="repo-filter">
+        Suche{' '}
+        <input
+          type="search"
+          value={query}
+          placeholder="Nummer (#45) oder Titel"
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </label>
       {view && view.repositories.length > 1 && (
         <label className="repo-filter">
           Repository{' '}
@@ -517,6 +556,7 @@ export function QueueBoard({
           key={repository.repositoryId}
           repository={repository}
           filter={filter}
+          query={query}
           view={view!}
           now={now}
           events={view?.events ?? []}
