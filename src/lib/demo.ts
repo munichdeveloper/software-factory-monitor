@@ -1,5 +1,5 @@
 import type { MergeProgress, QueueRun, QueueView } from './queue';
-import type { AnalyticsCall, AnalyticsView } from './analytics';
+import type { AnalyticsCall, AnalyticsView, CostEval } from './analytics';
 import type { MetricsItem, MetricsView, RouterCase, RouterGroup } from './metrics';
 
 /** Sample data for MONITOR_DEMO=1 (development only) and tests. */
@@ -303,6 +303,40 @@ export function demoQueue(now = new Date()): QueueView {
   };
 }
 
+function evalRow(
+  id: string,
+  costUsd: number,
+  model: string,
+  effort: string,
+  judgement: CostEval['judgement'],
+  shadow = false,
+  metrics: CostEval['metrics'] = {},
+): CostEval {
+  return {
+    repository: 'munichdeveloper/demo',
+    issueNumber: 1,
+    executionId: id.repeat(32),
+    model,
+    effort,
+    costUsd,
+    outcome: 'success',
+    metrics: {
+      duplicateReads: 4,
+      readsOutsideDiff: 12,
+      testOrBuildCommands: 6,
+      failedTools: 2,
+      fixedContextTokens: 38000,
+      changedLines: 140,
+      ...metrics,
+    },
+    judgement,
+    evalModel: shadow ? 'claude-haiku-5-5' : 'claude-opus-5-5',
+    shadow,
+    error: null,
+    at: new Date().toISOString(),
+  };
+}
+
 /** Sample analytics for MONITOR_DEMO=1 (development only) and tests. */
 export function demoAnalytics(now = new Date()): AnalyticsView {
   const ago = (days: number, hours = 0) =>
@@ -427,13 +461,20 @@ export function demoAnalytics(now = new Date()): AnalyticsView {
         failedCodingRuns: 1,
         lastActivity: ago(0, 5),
         calls: [
-          call({ costUsd: 2.6, outcome: 'error_max_turns', lost: true, at: ago(1, 3) }),
+          call({
+            executionId: 'e'.repeat(32),
+            costUsd: 2.6,
+            outcome: 'error_max_turns',
+            lost: true,
+            at: ago(1, 3),
+          }),
           call({
             selection: 'escalation',
             routerChoice: null,
             routerProbability: null,
             model: 'claude-opus-5-5',
             effort: 'high',
+            executionId: 'f'.repeat(32),
             costUsd: 4.4,
             at: ago(0, 8),
           }),
@@ -468,8 +509,15 @@ export function demoAnalytics(now = new Date()): AnalyticsView {
         failedCodingRuns: 1,
         lastActivity: ago(0, 2),
         calls: [
-          call({ costUsd: 1.66, outcome: null, lost: true, at: ago(0, 4) }),
           call({
+            executionId: 'c'.repeat(32),
+            costUsd: 1.66,
+            outcome: null,
+            lost: true,
+            at: ago(0, 4),
+          }),
+          call({
+            executionId: 'd'.repeat(32),
             costUsd: 3.6,
             model: 'claude-opus-5-5',
             effort: 'high',
@@ -478,6 +526,63 @@ export function demoAnalytics(now = new Date()): AnalyticsView {
           }),
         ],
       },
+    ],
+    costEvals: [
+      evalRow('e', 2.6, 'claude-sonnet-5-5', 'medium', {
+        verdict: 'wasteful',
+        fairCostUsd: 0.9,
+        waste: [
+          {
+            category: 'unnecessary-reads',
+            usd: 1.1,
+            note: '31 Dateien außerhalb des Diffs gelesen',
+          },
+          { category: 'dead-end', usd: 0.6, note: 'Ansatz nach 40 Turns verworfen' },
+        ],
+        reason: 'Der Lauf hat viel gelesen und ist ohne Ergebnis an der Turn-Grenze gescheitert.',
+      }),
+      evalRow(
+        'e',
+        2.6,
+        'claude-sonnet-5-5',
+        'medium',
+        {
+          verdict: 'expensive',
+          fairCostUsd: 1.3,
+          waste: [{ category: 'unnecessary-reads', usd: 0.8, note: 'viele Leserunden' }],
+          reason: 'Teurer als nötig, aber nicht grob verschwenderisch.',
+        },
+        true,
+      ),
+      evalRow('f', 4.4, 'claude-opus-5-5', 'high', {
+        verdict: 'expensive',
+        fairCostUsd: 2.9,
+        waste: [
+          { category: 'model-too-strong', usd: 1.0, note: 'Sonnet hätte gereicht' },
+          { category: 'repeated-tests', usd: 0.5, note: '9 volle Testläufe' },
+        ],
+        reason: 'Das Modell war für die Aufgabe zu stark gewählt und die Tests liefen mehrfach.',
+      }),
+      evalRow(
+        'c',
+        1.66,
+        'claude-sonnet-5-5',
+        'medium',
+        {
+          verdict: 'appropriate',
+          fairCostUsd: 1.5,
+          waste: [],
+          reason: 'Ohne Werkzeugspur nur grob eingeschätzt; die Kosten wirken plausibel.',
+        },
+        false,
+        { traceMissing: true, duplicateReads: null, readsOutsideDiff: null },
+      ),
+      evalRow('d', 3.6, 'claude-opus-5-5', 'high', {
+        verdict: 'appropriate',
+        fairCostUsd: 3.4,
+        waste: [],
+        reason: 'Der Aufwand passt zur Größe der Änderung.',
+      }),
     ],
   };
 }
