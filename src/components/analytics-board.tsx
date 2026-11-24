@@ -9,6 +9,12 @@ import {
   tokenText,
   usd,
   weekRows,
+  evalsFor,
+  shortModel,
+  verdictClass,
+  verdictLabels,
+  wasteLabels,
+  type CostEval,
   type AnalyticsFeature,
   type AnalyticsView,
 } from '@/lib/analytics';
@@ -189,7 +195,70 @@ function Models({ view }: { view: AnalyticsView }) {
   );
 }
 
-function Feature({ feature }: { feature: AnalyticsFeature }) {
+const count = (n: number | null | undefined) => (n === null || n === undefined ? '–' : String(n));
+function verdictText(e: CostEval) {
+  if (e.error || !e.judgement) return 'nicht bewertet';
+  return verdictLabels[e.judgement.verdict] ?? e.judgement.verdict;
+}
+
+function Evaluation({ main, shadow }: { main?: CostEval; shadow?: CostEval }) {
+  if (!main) return null;
+  const j = main.error ? null : main.judgement;
+  const m = main.metrics;
+  return (
+    <div className="eval">
+      <details>
+        <summary>
+          <span className={`badge ${j ? verdictClass(j.verdict) : ''}`}>{verdictText(main)}</span>
+          {shadow && (
+            <span className="muted eval-shadow">
+              {shortModel(shadow.evalModel)}: {verdictText(shadow)}
+            </span>
+          )}
+        </summary>
+        <div className="eval-body">
+          {j ? (
+            <>
+              <p>
+                Kosten {usd(main.costUsd)} · angemessen wären {usd(j.fairCostUsd)}
+              </p>
+              <p>{j.reason}</p>
+              {j.waste.length > 0 && (
+                <ul>
+                  {j.waste.map((w, i) => (
+                    <li key={`${w.category}-${i}`}>
+                      {wasteLabels[w.category] ?? w.category}: {usd(w.usd)}
+                      <span className="muted"> {w.note}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          ) : (
+            <p className="muted">{main.error ?? 'Keine Bewertung vorhanden.'}</p>
+          )}
+          <dl className="eval-metrics">
+            <dt>Doppelt gelesen</dt>
+            <dd>{count(m.duplicateReads)}</dd>
+            <dt>Gelesen außerhalb des Diffs</dt>
+            <dd>{count(m.readsOutsideDiff)}</dd>
+            <dt>Test-/Build-Aufrufe</dt>
+            <dd>{count(m.testOrBuildCommands)}</dd>
+            <dt>Fehlgeschlagene Werkzeuge</dt>
+            <dd>{count(m.failedTools)}</dd>
+            <dt>Fixkontext (Tokens)</dt>
+            <dd>{count(m.fixedContextTokens)}</dd>
+            <dt>Geänderte Zeilen</dt>
+            <dd>{count(m.changedLines)}</dd>
+          </dl>
+          {m.traceMissing && <p className="muted">ohne Werkzeugspur bewertet</p>}
+        </div>
+      </details>
+    </div>
+  );
+}
+
+function Feature({ feature, view }: { feature: AnalyticsFeature; view: AnalyticsView }) {
   const present = stepOrder.filter((s) => feature.steps[s]);
   return (
     <li className="feature">
@@ -236,6 +305,7 @@ function Feature({ feature }: { feature: AnalyticsFeature }) {
                 <th>Gewählt von</th>
                 <th>Verbrauch</th>
                 <th>Ergebnis</th>
+                <th>Bewertung</th>
                 <th className="num">Kosten</th>
               </tr>
             </thead>
@@ -266,6 +336,9 @@ function Feature({ feature }: { feature: AnalyticsFeature }) {
                   </td>
                   <td className="muted">{tokenText(c.tokens)}</td>
                   <td>{c.outcome === 'success' ? 'Erfolg' : (c.outcome ?? 'kein Ergebnis')}</td>
+                  <td>
+                    {c.step === 'coding' && <Evaluation {...evalsFor(view, c.executionId)} />}
+                  </td>
                   <td className="num">{usd(c.costUsd)}</td>
                 </tr>
               ))}
@@ -365,7 +438,7 @@ export function AnalyticsBoard({
             {view.features.length ? (
               <ol className="features">
                 {view.features.map((f) => (
-                  <Feature key={`${f.repository}#${f.issueNumber}`} feature={f} />
+                  <Feature key={`${f.repository}#${f.issueNumber}`} feature={f} view={view} />
                 ))}
               </ol>
             ) : (

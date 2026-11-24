@@ -770,6 +770,45 @@ code {
   color: var(--stuck);
   opacity: 0.8;
 }
+.eval {
+  min-width: 11rem;
+  max-width: 22rem;
+}
+.eval summary {
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.eval-shadow {
+  font-size: 0.78rem;
+}
+.eval-body {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 0.86rem;
+}
+.eval-body p {
+  margin: 0.3rem 0;
+}
+.eval-body ul {
+  margin: 0.3rem 0;
+  padding-left: 1.1rem;
+}
+.eval-metrics {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.15rem 0.75rem;
+  margin: 0.3rem 0;
+}
+.eval-metrics dt {
+  color: var(--muted);
+}
+.eval-metrics dd {
+  margin: 0;
+  text-align: right;
+}
 .footnote {
   font-size: 0.82rem;
   max-width: 60rem;

@@ -1,5 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
-import { analyticsQuery, fetchAnalytics, tokenText, usd, weekRows } from '../src/lib/analytics';
+import {
+  analyticsQuery,
+  analyticsViewSchema,
+  evalsFor,
+  fetchAnalytics,
+  shortModel,
+  stepLabels,
+  tokenText,
+  usd,
+  verdictLabels,
+  wasteLabels,
+  weekRows,
+} from '../src/lib/analytics';
 import { demoAnalytics } from '../src/lib/demo';
 
 const token = 'q'.repeat(32);
@@ -57,5 +69,52 @@ describe('analytics client', () => {
     const rows = weekRows(demoAnalytics());
     expect(rows.map((r) => r.week)).toEqual(['2026-11-09', '2026-11-16']);
     expect(rows[1]!.total).toBeCloseTo(12.87);
+  });
+});
+
+describe('cost evaluations', () => {
+  const view = demoAnalytics(new Date('2026-11-19T12:00:00Z'));
+  it('accepts the view with and without the new fields', () => {
+    expect(analyticsViewSchema.safeParse(view).success).toBe(true);
+    const { costEvals: _a, costReport: _b, ...old } = view;
+    const parsed = analyticsViewSchema.safeParse(old);
+    expect(parsed.success).toBe(true);
+    const withReport = analyticsViewSchema.parse({
+      ...old,
+      costReport: { week: '2026-11-16', model: 'm', error: 'x', at: 'now', report: null },
+    });
+    expect(withReport.costReport?.error).toBe('x');
+  });
+  it('keeps unknown verdicts and categories', () => {
+    const e = structuredClone(view.costEvals![0]!);
+    e.judgement = {
+      verdict: 'mysterious',
+      fairCostUsd: 1,
+      waste: [{ category: 'new-thing', usd: 1, note: 'n' }],
+      reason: 'r',
+    };
+    const parsed = analyticsViewSchema.parse({ ...view, costEvals: [e] });
+    expect(parsed.costEvals![0]!.judgement?.verdict).toBe('mysterious');
+    expect(parsed.costEvals![0]!.judgement?.waste[0]!.category).toBe('new-thing');
+  });
+  it('matches evaluations to runs by executionId', () => {
+    const { main, shadow } = evalsFor(view, 'e'.repeat(32));
+    expect(main?.judgement?.verdict).toBe('wasteful');
+    expect(shadow?.shadow).toBe(true);
+    expect(evalsFor(view, 'f'.repeat(32)).shadow).toBeUndefined();
+    expect(evalsFor(view, null).main).toBeUndefined();
+    expect(evalsFor({}, 'e'.repeat(32)).main).toBeUndefined();
+    const verdicts = new Set(
+      view.costEvals!.filter((e) => !e.shadow).map((e) => e.judgement?.verdict),
+    );
+    expect(verdicts).toEqual(new Set(['wasteful', 'expensive', 'appropriate']));
+    expect(view.costEvals!.some((e) => e.metrics.traceMissing)).toBe(true);
+  });
+  it('has German labels', () => {
+    expect(stepLabels['cost-eval']).toBe('Kosten-Eval');
+    expect(verdictLabels.wasteful).toBe('verschwenderisch');
+    expect(wasteLabels['dead-end']).toBe('Sackgasse');
+    expect(shortModel('claude-haiku-5-5')).toBe('Haiku');
+    expect(shortModel('gpt-6.1-sol')).toBe('gpt-6.1-sol');
   });
 });
